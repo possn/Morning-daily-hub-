@@ -24,7 +24,7 @@ Localmente: `cd web && npm i && npm run dev` e abre `http://localhost:5173/?demo
 1. Cria (ou escolhe) um projeto. No SQL Editor corre `supabase/migrations/0001_init.sql`.
 2. *Authentication → Users → Add user*: cria o teu utilizador com o teu email. Copia o **User UID**.
 3. *Authentication → Sign In / Providers*: desliga **Allow new users to sign up**.
-4. *Authentication → Emails → Magic Link*: põe `{{ .Token }}` no corpo do email (a app pede o código de 6 dígitos; links mágicos abrem no Safari e não na PWA instalada).
+4. A app entra com email + password desse utilizador (a sessão fica guardada no iPhone). Links mágicos não servem: abrem no Safari e não na PWA instalada.
 5. Edge function para o Atalho:
    ```bash
    supabase functions deploy ingest-outlook --no-verify-jwt

@@ -326,36 +326,28 @@ function renderMain() {
     </main>`;
 }
 
-function renderLogin(step: "email" | "code", email = "", msg = "") {
+function renderLogin(msg = "") {
   app.innerHTML = `
     <main class="wrap login">
-      <header class="top"><h1>Daily Hub</h1><p class="headline">Entra com o teu email. Recebes um código de 6 dígitos.</p></header>
+      <header class="top"><h1>Daily Hub</h1><p class="headline">Entra uma vez com o email e a password do teu utilizador. A sessão fica guardada.</p></header>
       <form class="card form" id="login">
-        ${
-          step === "email"
-            ? `<label>Email<input name="email" type="email" autocomplete="email" required value="${esc(email)}" /></label>
-               <button class="primary" type="submit">Enviar código</button>`
-            : `<label>Código<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" required /></label>
-               <button class="primary" type="submit">Entrar</button>`
-        }
+        <label>Email<input name="email" type="email" autocomplete="username" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="primary" type="submit">Entrar</button>
         ${msg ? `<p class="err">${esc(msg)}</p>` : ""}
       </form>
     </main>`;
   const form = document.getElementById("login") as HTMLFormElement;
   form.onsubmit = async (ev) => {
     ev.preventDefault();
-    const fd = new FormData(form);
     if (!sb) return;
-    if (step === "email") {
-      const e = String(fd.get("email"));
-      // shouldCreateUser: false — só a conta que criaste no Supabase entra.
-      const { error } = await sb.auth.signInWithOtp({ email: e, options: { shouldCreateUser: false } });
-      renderLogin(error ? "email" : "code", e, error ? "Não foi possível enviar o código." : "");
-    } else {
-      const { error } = await sb.auth.verifyOtp({ email, token: String(fd.get("code")).trim(), type: "email" });
-      if (error) renderLogin("code", email, "Código inválido ou expirado.");
-      else void boot();
-    }
+    const fd = new FormData(form);
+    const { error } = await sb.auth.signInWithPassword({
+      email: String(fd.get("email")).trim(),
+      password: String(fd.get("password")),
+    });
+    if (error) renderLogin("Email ou password errados.");
+    else void boot();
   };
 }
 
@@ -376,7 +368,7 @@ app.addEventListener("click", async (ev) => {
   } else if (t.dataset.action === "logout") {
     clearCache();
     await sb?.auth.signOut();
-    renderLogin("email");
+    renderLogin();
     return;
   }
   renderMain();
@@ -398,7 +390,7 @@ async function refresh() {
 async function boot() {
   if (!isDemo && sb) {
     const { data } = await sb.auth.getSession();
-    if (!data.session) return renderLogin("email");
+    if (!data.session) return renderLogin();
   }
   // 1) pinta já com a cache (abertura instantânea); 2) atualiza da rede.
   renderMain();
