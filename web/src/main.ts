@@ -1,6 +1,6 @@
 import "./styles.css";
 import type { Brief, CalEvent, EmailItem, TaskItem } from "./types";
-import { clearCache, fetchSnapshot, isDemo, readCache, sb, type Snapshot } from "./data";
+import { clearCache, enablePush, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
@@ -316,6 +316,17 @@ function monthGrid(): string {
     </section>`;
 }
 
+let notifMsg = "";
+function notifRow(): string {
+  const st = pushState();
+  if (st === "indisponivel") return "";
+  if (st === "ligadas") return `<p class="muted">🔔 Notificação da manhã ligada${notifMsg ? ` · ${esc(notifMsg)}` : ""}</p>`;
+  if (st === "bloqueadas") return `<p class="muted">Notificações bloqueadas: ativa em Definições › Notificações › Daily Hub.</p>`;
+  return `<button class="primary notif" data-action="notif">🔔 Ativar notificação da manhã</button>${
+    notifMsg ? `<p class="err">${esc(notifMsg)}</p>` : ""
+  }`;
+}
+
 function footer(): string {
   const s = state.snap;
   const b = s?.brief;
@@ -329,6 +340,7 @@ function footer(): string {
       <p class="muted">${
         b ? `Brief gerado às ${time(b.generatedAt)}${b.aiUsed ? "" : " (sem IA)"}${lastOutlook}` : "Ainda não há brief para hoje."
       }</p>
+      ${notifRow()}
       ${!isDemo ? `<button class="link" data-action="logout">Terminar sessão</button>` : ""}
     </footer>`;
 }
@@ -400,6 +412,8 @@ app.addEventListener("click", async (ev) => {
     const [y, m] = state.month.split("-").map(Number);
     const d = new Date(y, m - 1 + Number(t.dataset.month), 1);
     state.month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  } else if (t.dataset.action === "notif") {
+    notifMsg = (await enablePush()) ?? "";
   } else if (t.dataset.action === "logout") {
     clearCache();
     await sb?.auth.signOut();
@@ -430,6 +444,7 @@ async function boot() {
   // 1) pinta já com a cache (abertura instantânea); 2) atualiza da rede.
   renderMain();
   await refresh();
+  void syncPush();
 }
 
 // Ao voltar à app (iOS mantém PWAs suspensas), atualiza se passaram >5 min.

@@ -44,6 +44,65 @@ export function clearCache() {
   }
 }
 
+// Eventos vindos do iPhone (Atalho): Outlook do hospital e Família do iCloud.
+// Turnos de urgência ("Banco M", "Banco P dia", "Urgência", "SU", "Prevenção") contam como escala.
+export const DUTY_RE = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+export function deviceSource(title: string, calendar?: string | null): CalEvent["source"] {
+  if (DUTY_RE.test(title)) return "escala";
+  if (/fam[ií]l/i.test(calendar ?? "")) return "google"; // pessoal
+  return "outlook";
+}
+
+// ---------- notificações (Web Push) ----------
+const VAPID = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+
+export function pushSupported(): boolean {
+  return !isDemo && !!VAPID && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+export function pushState(): "ligadas" | "bloqueadas" | "por-ativar" | "indisponivel" {
+  if (!pushSupported()) return "indisponivel";
+  if (Notification.permission === "granted") return "ligadas";
+  if (Notification.permission === "denied") return "bloqueadas";
+  return "por-ativar";
+}
+
+function b64uToBytes(s: string): Uint8Array<ArrayBuffer> {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const bin = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// Pede autorização (tem de vir de um toque) e guarda a subscrição no Supabase.
+export async function enablePush(): Promise<string | null> {
+  if (!pushSupported() || !sb) return "Neste aparelho as notificações só funcionam com a app instalada no ecrã principal.";
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") return "Sem autorização. Ativa em Definições › Notificações › Daily Hub.";
+  return syncPush();
+}
+
+// Garante que a subscrição atual está guardada (o iOS pode renová-la).
+export async function syncPush(): Promise<string | null> {
+  if (!pushSupported() || !sb || Notification.permission !== "granted") return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(VAPID!) }));
+    const j = sub.toJSON();
+    const { data } = await sb.auth.getUser();
+    if (!data.user || !j.endpoint || !j.keys) return "Sessão expirada.";
+    const { error } = await sb
+      .from("push_subscriptions")
+      .upsert({ endpoint: j.endpoint, user_id: data.user.id, p256dh: j.keys.p256dh, auth: j.keys.auth });
+    return error ? "Não consegui guardar a subscrição." : null;
+  } catch {
+    return "Não consegui ativar as notificações.";
+  }
+}
+
 export async function fetchSnapshot(): Promise<Snapshot> {
   if (isDemo || !sb) {
     return { brief: demoBrief(), outlook: demoOutlook(), fetchedAt: new Date().toISOString() };
@@ -65,7 +124,7 @@ export async function fetchSnapshot(): Promise<Snapshot> {
     brief: (b.data?.payload as Brief) ?? null,
     outlook: (o.data ?? []).map((r) => ({
       id: `o:${r.uid}`,
-      source: "outlook" as const,
+      source: deviceSource(r.title, r.calendar),
       title: r.title,
       start: r.start_at,
       end: r.end_at,

@@ -269,3 +269,5 @@ body { background: var(--bg); }
 .primary { background: var(--accent); border-radius: 14px; }
 .link { color: var(--accent); }
 .ev-bar { border-radius: 3px; }
+
+.foot .notif { width: 100%; margin: 4px 0 10px; }
