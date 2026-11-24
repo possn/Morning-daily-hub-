@@ -202,8 +202,9 @@ export async function fetchToReply(now = new Date()): Promise<ReplyItem[]> {
       };
     }),
   );
-  return items
-    .filter((x): x is ReplyItem => x !== null)
-    .sort((a, b) => Number(b.starred) - Number(a.starred) || b.days - a.days)
-    .slice(0, 10);
+  const ok = items.filter((x): x is ReplyItem => x !== null);
+  // Estrela: as 4 mais recentes (as antigas já não pedem ação). Sem resposta: até 6, as mais antigas primeiro.
+  const star = ok.filter((x) => x.starred).sort((a, b) => a.days - b.days).slice(0, 4);
+  const wait = ok.filter((x) => !x.starred).sort((a, b) => b.days - a.days).slice(0, 6);
+  return [...star, ...wait];
 }
