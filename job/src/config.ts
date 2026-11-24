@@ -9,7 +9,7 @@ export const DAYS_AHEAD = Number(process.env.DAYS_AHEAD ?? 14);
 
 export const config = {
   dryRun: process.env.DRY_RUN === "1",
-  anthropicKey: process.env.ANTHROPIC_API_KEY,
+  anthropicKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
   model: process.env.CLAUDE_MODEL ?? "claude-opus-5-5",
 
   google: {
@@ -46,8 +46,9 @@ export const config = {
   },
 
   supabase: {
-    url: process.env.SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    ownerUserId: process.env.OWNER_USER_ID,
+    // Valores colados à mão podem trazer espaços ou "/" no fim.
+    url: process.env.SUPABASE_URL?.trim().replace(/\/+$/, "") || undefined,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || undefined,
+    ownerUserId: process.env.OWNER_USER_ID?.trim() || undefined,
   },
 };
