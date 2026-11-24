@@ -112,8 +112,8 @@ function header(brief: Brief | null): string {
         }
         <text class="edge" x="${CX - R}" y="${CY + 18}" text-anchor="middle">${hhmm(rise)}</text>
         <text class="edge" x="${CX + R}" y="${CY + 18}" text-anchor="middle">${hhmm(set)}</text>
+        <text class="clock" x="${CX}" y="${CY - 22}" text-anchor="middle" aria-label="Hora atual">${hhmm(now)}</text>
       </svg>
-      <div class="clock" aria-label="Hora atual">${hhmm(now)}</div>
       <p class="eyebrow">${esc(cap(now.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })))}</p>
       <h1>${greet}, Pedro</h1>
       ${brief?.headline ? `<p class="headline">${esc(brief.headline)}</p>` : ""}
