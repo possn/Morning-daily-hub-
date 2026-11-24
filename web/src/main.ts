@@ -1,5 +1,5 @@
 import "./styles.css";
-import type { Brief, CalEvent, EmailItem, TaskItem } from "./types";
+import type { Brief, CalEvent, EmailItem, ReplyItem, TaskItem } from "./types";
 import { clearCache, enablePush, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
@@ -245,6 +245,53 @@ function emailsCard(emails: EmailItem[]): string {
     </section>`;
 }
 
+function replyCard(items: ReplyItem[] | undefined): string {
+  if (!items || items.length === 0) return "";
+  const dias = (n: number) => (n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`);
+  return `
+    <section class="card">
+      <h2>A responder <span class="count">${items.length}</span></h2>
+      <ul class="list">${items
+        .map(
+          (m) => `
+        <li>
+          <a class="row" href="${esc(safeHref(m.link))}" target="_blank" rel="noopener">
+            <span class="pill ${m.starred ? "alta" : "baixa"}">${m.starred ? "★" : dias(m.days).replace("há ", "")}</span>
+            <span class="row-body">
+              <span class="row-title">${esc(m.subject)}</span>
+              <span class="row-sub">${esc(m.from)} · ${m.starred ? "com estrela" : `sem resposta ${dias(m.days)}`}</span>
+            </span>
+            <span class="chev" aria-hidden="true">›</span>
+          </a>
+        </li>`,
+        )
+        .join("")}</ul>
+    </section>`;
+}
+
+// ---------- faixas do dia ----------
+// A página muda com a hora: de manhã a agenda e a escala, à tarde as tarefas rápidas,
+// ao fim do dia o que ficou por responder e a preparação de amanhã, ao fim de semana a vista pessoal.
+type Faixa = "manha" | "tarde" | "fecho" | "fim-de-semana" | "vespera";
+
+function faixaDoDia(d = new Date()): Faixa {
+  const h = d.getHours();
+  const dow = d.getDay();
+  if (dow === 6 || (dow === 0 && h < 18)) return "fim-de-semana";
+  if (dow === 0) return "vespera";
+  if (h < 14) return "manha";
+  if (h < 19) return "tarde";
+  return "fecho";
+}
+
+const FAIXA_TEXTO: Record<Faixa, string> = {
+  manha: "Manhã: agenda e escala primeiro.",
+  tarde: "Tarde: tarefas rápidas e emails.",
+  fecho: "Fim do dia: o que ficou por responder e o dia de amanhã.",
+  "fim-de-semana": "Fim de semana: a tua vista pessoal.",
+  vespera: "Domingo à noite: a preparação da semana.",
+};
+
 function tasksCard(tasks: TaskItem[]): string {
   const today = ymd(new Date());
   return `
@@ -352,14 +399,32 @@ function renderMain() {
   const stale = b && b.date !== ymd(new Date());
   let body = "";
   if (state.view === "hoje") {
+    const faixa = faixaDoDia();
+    const hoje = ymd(new Date());
+    // Ao fim do dia (e domingo à noite) o dia em foco passa a ser amanhã, a não ser que escolhas outro.
+    const prepara = faixa === "fecho" || faixa === "vespera";
+    const dia = prepara && state.selected === hoje ? addDays(hoje, 1) : state.selected;
+    const titulo = dia === hoje ? "Agenda de hoje" : dia === addDays(hoje, 1) ? "Amanhã" : undefined;
+    const c = {
+      agenda: agenda(dia, titulo),
+      resumo: b ? summaryCard(b) : "",
+      emails: b ? emailsCard(b.emails) : "",
+      responder: b ? replyCard(b.toReply) : "",
+      tarefas: b ? tasksCard(b.tasks) : "",
+    };
+    const ordem: Record<Faixa, (keyof typeof c)[]> = {
+      manha: ["agenda", "resumo", "emails", "responder", "tarefas"],
+      tarde: ["tarefas", "emails", "responder", "agenda", "resumo"],
+      fecho: ["responder", "tarefas", "agenda", "emails", "resumo"],
+      "fim-de-semana": ["agenda", "tarefas", "resumo", "responder", "emails"],
+      vespera: ["agenda", "tarefas", "responder", "resumo", "emails"],
+    };
     body = `
       ${dutyBanner()}
       ${stale ? `<p class="stale">A mostrar o brief de ${esc(b!.date)}. O de hoje ainda não foi gerado.</p>` : ""}
       ${weekStrip()}
-      ${agenda(state.selected, state.selected === ymd(new Date()) ? "Agenda de hoje" : undefined)}
-      ${b ? summaryCard(b) : ""}
-      ${b ? emailsCard(b.emails) : ""}
-      ${b ? tasksCard(b.tasks) : ""}`;
+      <p class="faixa">${FAIXA_TEXTO[faixa]}</p>
+      ${ordem[faixa].map((k) => c[k]).join("")}`;
   } else {
     body = `${monthGrid()}${agenda(state.selected)}`;
   }
@@ -370,6 +435,90 @@ function renderMain() {
       ${body}
       ${footer()}
     </main>`;
+}
+
+
+// ---------- segundo fator (código da app de autenticação) ----------
+// A base de dados só entrega dados a sessões com segundo fator (aal2). Depois de verificado,
+// o iPhone guarda a sessão: não volta a pedir o código a cada abertura.
+
+async function needsSecondFactor(): Promise<boolean> {
+  if (isDemo || !sb) return false;
+  const { data } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (data?.currentLevel === "aal2") return false;
+  const f = await sb.auth.mfa.listFactors();
+  const verified = f.data?.totp ?? [];
+  if (verified.length) renderMfaChallenge(verified[0].id);
+  else await renderMfaEnroll();
+  return true;
+}
+
+function codeForm(id: string, msg: string): string {
+  return `
+    <form class="card form" id="${id}">
+      <label>Código de 6 dígitos<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required /></label>
+      <button class="primary" type="submit">Confirmar</button>
+      ${msg ? `<p class="err">${esc(msg)}</p>` : ""}
+    </form>`;
+}
+
+function onCode(formId: string, factorId: string, retry: (msg: string) => void) {
+  const form = document.getElementById(formId) as HTMLFormElement;
+  form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    if (!sb) return;
+    const code = String(new FormData(form).get("code")).replace(/\s/g, "");
+    const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code });
+    if (error) retry("Código errado ou expirado. Tenta o código seguinte.");
+    else void boot();
+  };
+}
+
+function renderMfaChallenge(factorId: string, msg = "") {
+  app.innerHTML = `
+    <main class="wrap login">
+      ${header(null)}
+      <p class="headline center">Escreve o código da tua app de autenticação.</p>
+      ${codeForm("mfa", msg)}
+    </main>`;
+  onCode("mfa", factorId, (m) => renderMfaChallenge(factorId, m));
+}
+
+async function renderMfaEnroll(msg = "") {
+  if (!sb) return;
+  // Limpa tentativas anteriores por concluir.
+  const all = (await sb.auth.mfa.listFactors()).data?.all ?? [];
+  for (const f of all) if (f.status !== "verified") await sb.auth.mfa.unenroll({ factorId: f.id });
+  const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "Daily Hub" });
+  if (error || !data) {
+    app.innerHTML = `<main class="wrap login">${header(null)}<p class="err center">Não consegui preparar o segundo fator. Fecha e abre a app.</p></main>`;
+    return;
+  }
+  const secret = data.totp.secret;
+  app.innerHTML = `
+    <main class="wrap login">
+      ${header(null)}
+      <section class="card mfa">
+        <h2>Ativar o segundo fator</h2>
+        <p>Uma vez só. A partir daqui, para entrar é preciso a password <b>e</b> um código que muda a cada 30 segundos.</p>
+        <ol class="mfa-steps">
+          <li><a class="primary btn" href="${esc(data.totp.uri)}">Adicionar à app Palavras-passe</a><br/>
+            <span class="muted">Se não abrir: app <b>Palavras-passe</b> → a tua conta → <i>Configurar código de verificação</i> → <i>Introduzir chave</i>, e cola esta chave:</span>
+            <code class="secret" id="secret">${esc(secret)}</code>
+            <button class="link" type="button" id="copy">Copiar chave</button></li>
+          <li>Escreve aqui o código de 6 dígitos que aparece.</li>
+        </ol>
+        <img class="qr" src="${esc(data.totp.qr_code)}" alt="Código QR para outro dispositivo" width="160" height="160" />
+      </section>
+      ${codeForm("enroll", msg)}
+    </main>`;
+  document.getElementById("copy")!.onclick = () => navigator.clipboard?.writeText(secret).catch(() => {});
+  onCode("enroll", data.id, (m) => {
+    const p = document.querySelector("#enroll .err") ?? document.createElement("p");
+    p.className = "err";
+    p.textContent = m;
+    document.getElementById("enroll")!.appendChild(p);
+  });
 }
 
 function renderLogin(msg = "") {
@@ -440,6 +589,7 @@ async function boot() {
   if (!isDemo && sb) {
     const { data } = await sb.auth.getSession();
     if (!data.session) return renderLogin();
+    if (await needsSecondFactor()) return;
   }
   // 1) pinta já com a cache (abertura instantânea); 2) atualiza da rede.
   renderMain();
