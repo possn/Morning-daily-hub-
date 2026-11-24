@@ -367,3 +367,7 @@ body.menu-open { overflow: hidden; }
 .traffic .pill { margin-left: 4px; vertical-align: 1px; }
 .small { font-size: 12px; margin-top: 10px; }
 .traffic .pill { white-space: nowrap; }
+
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.mail-apps { display: flex; gap: 14px; font-size: 14px; }
+.subhead-li { border: 0 !important; padding: 0 !important; }
