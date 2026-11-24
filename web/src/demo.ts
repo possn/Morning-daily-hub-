@@ -34,6 +34,10 @@ export function demoBrief(): Brief {
       { id: "m2", from: "Secretariado do congresso", subject: "Submissão de resumos: último aviso", why: "Prazo na sexta", action: "Submeter o resumo", priority: "media", link: "#" },
       { id: "m3", from: "Banco", subject: "Extrato disponível", why: "Informativo", action: "Ver quando der", priority: "baixa", link: "#" },
     ],
+    toReply: [
+      { id: "r1", from: "Secretariado do internato", subject: "Avaliação intercalar: marcar data", days: 4, starred: false, link: "#" },
+      { id: "r2", from: "Sofia (colega)", subject: "Troca de banco 12/12?", days: 0, starred: true, link: "#" },
+    ],
     tasks: [
       { id: "t1", source: "notion", title: "Slides da sessão clínica", due: ymd(2), priority: "alta" },
       { id: "t2", source: "obsidian", title: "Ler a revisão sobre ventilação não invasiva", priority: "media", context: "Leituras" },

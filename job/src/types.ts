@@ -24,6 +24,15 @@ export interface EmailItem {
   link: string;
 }
 
+export interface ReplyItem {
+  id: string; // threadId
+  from: string;
+  subject: string;
+  days: number; // dias desde a última mensagem
+  starred: boolean;
+  link: string;
+}
+
 export interface TaskItem {
   id: string;
   source: "notion" | "obsidian";
@@ -43,6 +52,7 @@ export interface Brief {
   duty: { label: string; start: string; end: string } | null;
   events: CalEvent[]; // próximos 14 dias, Google + escala (Outlook vem à parte)
   emails: EmailItem[];
+  toReply?: ReplyItem[]; // com estrela ou sem resposta há mais de 2 dias
   tasks: TaskItem[];
   sources: Record<string, "ok" | "erro" | "desligado">;
   aiUsed: boolean;

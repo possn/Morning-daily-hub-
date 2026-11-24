@@ -1,6 +1,7 @@
 import { config, DAYS_AHEAD } from "../config.js";
 import { addDays, startOfLocalDay } from "../time.js";
-import type { CalEvent } from "../types.js";
+import type { CalEvent, ReplyItem } from "../types.js";
+import { clip, isBlockedSender, redact } from "../redact.js";
 
 export interface RawEmail {
   id: string;
@@ -149,4 +150,60 @@ function isDuty(title?: string): boolean {
     // palavras curtas (ex.: "SU") só contam como palavra inteira
     return kw.length <= 3 ? new RegExp(`[^\\p{L}]${kw}[^\\p{L}]`, "u").test(t) : t.includes(kw);
   });
+}
+
+// ---------- Emails a responder ----------
+// Com estrela, ou conversas na caixa de entrada em que a última mensagem não é tua há mais de 2 dias.
+// Sem IA: só metadados (remetente, assunto, datas). O corpo nunca é descarregado.
+
+const AUTOMATIC = /no-?reply|notifica|newsletter|mailer-daemon|donotreply|naoresponder|nao-responder/i;
+const cleanFrom = (f: string) => f.replace(/<[^>]+>/, "").replace(/"/g, "").trim() || f;
+
+type ThreadMeta = {
+  id: string;
+  messages: { id: string; internalDate: string; labelIds?: string[]; payload: { headers: { name: string; value: string }[] } }[];
+};
+
+export async function fetchToReply(now = new Date()): Promise<ReplyItem[]> {
+  const T = "https://gmail.googleapis.com/gmail/v1/users/me/threads";
+  const q = (query: string, max: number) => `${T}?${new URLSearchParams({ q: query, maxResults: String(max) })}`;
+  const [starred, waiting] = await Promise.all([
+    gget<{ threads?: { id: string }[] }>(q("is:starred -in:trash -in:spam", 15)),
+    gget<{ threads?: { id: string }[] }>(
+      q("in:inbox older_than:2d newer_than:21d -category:promotions -category:social -category:forums -category:updates", 25),
+    ),
+  ]);
+  const starredIds = new Set((starred.threads ?? []).map((t) => t.id));
+  const ids = [...new Set([...(starred.threads ?? []), ...(waiting.threads ?? [])].map((t) => t.id))];
+
+  const items = await Promise.all(
+    ids.map(async (id): Promise<ReplyItem | null> => {
+      const t = await gget<ThreadMeta>(`${T}/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+      const msgs = t.messages ?? [];
+      const last = msgs[msgs.length - 1];
+      if (!last) return null;
+      const h = (n: string) => last.payload.headers.find((x) => x.name.toLowerCase() === n)?.value ?? "";
+      const first = msgs[0];
+      const subject = first.payload.headers.find((x) => x.name.toLowerCase() === "subject")?.value ?? h("subject");
+      const isStar = starredIds.has(id) || msgs.some((m) => m.labelIds?.includes("STARRED"));
+      const repliedByMe = last.labelIds?.includes("SENT") ?? false;
+      const from = h("from");
+      if (!isStar && (repliedByMe || AUTOMATIC.test(from))) return null;
+      if (isBlockedSender(from)) return null;
+      if (isSelfNoise({ subject, snippet: "", from })) return null;
+      const days = Math.max(0, Math.floor((now.getTime() - Number(last.internalDate)) / 864e5));
+      return {
+        id,
+        from: clip(cleanFrom(from), 60),
+        subject: clip(redact(subject || "(sem assunto)"), 120),
+        days,
+        starred: isStar,
+        link: `https://mail.google.com/mail/u/0/#all/${id}`,
+      };
+    }),
+  );
+  return items
+    .filter((x): x is ReplyItem => x !== null)
+    .sort((a, b) => Number(b.starred) - Number(a.starred) || b.days - a.days)
+    .slice(0, 10);
 }

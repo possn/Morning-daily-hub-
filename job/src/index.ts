@@ -1,12 +1,12 @@
 import { writeFile } from "node:fs/promises";
 import { config } from "./config.js";
 import { localDate } from "./time.js";
-import { fetchCalendarEvents, fetchEmails, type RawEmail } from "./sources/google.js";
+import { fetchCalendarEvents, fetchEmails, fetchToReply, type RawEmail } from "./sources/google.js";
 import { fetchNotionTasks } from "./sources/notion.js";
 import { fetchObsidianTasks } from "./sources/obsidian.js";
 import { buildWithAI } from "./ai.js";
 import { saveBrief } from "./store.js";
-import type { Brief, CalEvent, TaskItem } from "./types.js";
+import type { Brief, CalEvent, ReplyItem, TaskItem } from "./types.js";
 
 async function attempt<T>(name: string, fallback: T, fn: () => Promise<T>, status: Brief["sources"]): Promise<T> {
   try {
@@ -25,9 +25,10 @@ async function main() {
   const today = localDate();
   const sources: Brief["sources"] = {};
 
-  const [events, emails, notion, obsidian] = await Promise.all([
+  const [events, emails, toReply, notion, obsidian] = await Promise.all([
     attempt<CalEvent[]>("calendario", [], () => fetchCalendarEvents(today), sources),
     attempt<RawEmail[]>("gmail", [], fetchEmails, sources),
+    attempt<ReplyItem[]>("responder", [], () => fetchToReply(), sources),
     config.notion.token ? attempt<TaskItem[]>("notion", [], fetchNotionTasks, sources) : ((sources.notion = "desligado"), []),
     config.obsidian.vaultPath ? attempt<TaskItem[]>("obsidian", [], fetchObsidianTasks, sources) : ((sources.obsidian = "desligado"), []),
   ]);
@@ -57,6 +58,7 @@ async function main() {
         priority: "media" as const,
         link: `https://mail.google.com/mail/u/0/#all/${e.threadId}`,
       })),
+    toReply,
     tasks: tasks.slice(0, 8),
     sources,
     aiUsed: false,
