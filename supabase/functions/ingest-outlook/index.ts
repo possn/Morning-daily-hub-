@@ -68,7 +68,7 @@ function compose(today: string, rows: Row[], brief: { headline?: string; emails?
     return s <= today && today <= e;
   });
   const duty = todays.find((r) => DUTY.test(r.title));
-  const hospital = todays.filter((r) => !r.all_day && !DUTY.test(r.title) && !/fam[ií]l/i.test(r.calendar ?? ""));
+  const hospital = todays.filter((r) => !r.all_day && !DUTY.test(r.title) && !/fam[ií]l|feriad|holiday|anivers|birthday|dorsal|runners/i.test(r.calendar ?? ""));
   const parts: string[] = [];
   if (brief?.headline) parts.push(brief.headline);
   if (hospital.length) {
@@ -124,10 +124,15 @@ Deno.serve(async (req) => {
   else if (typeof body.events === "string") raw = parseLoose(body.events);
 
   const rows = [];
+  const seen = new Set<string>();
   for (const e of raw.slice(0, 800)) {
     const start = toIso(e.start);
     const end = toIso(e.end) ?? start;
-    if (!start || !end || !e.title) continue;
+    // Ignora marcadores sem texto ("*") e duplicados entre calendários (ex.: feriados em dois calendários).
+    if (!start || !end || !e.title || /^[\s*.\-–—·]*$/.test(String(e.title))) continue;
+    const key = `${String(e.title).trim().toLowerCase()}|${start}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     rows.push({
       user_id: OWNER,
       uid: await sha(`${e.calendar ?? ""}|${e.title}|${start}`),
