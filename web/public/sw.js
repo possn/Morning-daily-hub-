@@ -1,6 +1,6 @@
 // Service worker: app shell em cache (abre instantâneo e offline).
 // Os dados vêm do Supabase e ficam em cache no localStorage pela app.
-const CACHE = "daily-hub-v1";
+const CACHE = "daily-hub-v2";
 // Caminhos relativos ao scope (funciona em possn.github.io/<repo>/).
 const ROOT = new URL("./", self.registration.scope).href;
 
@@ -45,5 +45,34 @@ self.addEventListener("fetch", (e) => {
           return r;
         }),
     ),
+  );
+});
+
+// Notificação da manhã (Web Push enviado pela função ingest-outlook).
+self.addEventListener("push", (e) => {
+  let d = { title: "Daily Hub", body: "O teu dia está pronto." };
+  try {
+    d = { ...d, ...e.data.json() };
+  } catch {
+    /* corpo vazio ou texto */
+  }
+  e.waitUntil(
+    self.registration.showNotification(d.title, {
+      body: d.body,
+      icon: ROOT + "icons/icon-192.png",
+      badge: ROOT + "icons/icon-192.png",
+      tag: "brief-manha",
+      data: { url: ROOT },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => c.url.startsWith(ROOT));
+      return open ? open.focus() : self.clients.openWindow(ROOT);
+    }),
   );
 });
