@@ -18,6 +18,14 @@ export function demoBrief(): Brief {
     date: ymd(),
     generatedAt: iso(0, 5, 16),
     headline: "Dia de serviço com reunião às 14h; urgência amanhã",
+    weather: {
+      place: "Amadora",
+      days: [0, 1, 2, 3, 4, 5, 6].map((i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        return { date: d.toLocaleDateString("en-CA"), label: "Pouco nublado", emoji: "🌤️", tmax: 17 - (i % 3), tmin: 9, rain: i === 1 ? 70 : 10 };
+      }),
+    },
     summary:
       "Manhã na UCIP com a passagem de turno às 8h. Às 14h tens a reunião de serviço e às 16h30 uma janela livre de uma hora. Amanhã estás de urgência 24h, por isso deixa a apresentação de quinta adiantada hoje.",
     focus: ["Rever os slides da sessão clínica de quinta", "Responder à coordenação sobre a escala de dezembro", "Submeter o resumo para o congresso até sexta"],

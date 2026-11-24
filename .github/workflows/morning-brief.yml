@@ -8,7 +8,12 @@ on:
     # Atualizações ao longo do dia (emails novos): 12:15 e 18:15 em Lisboa no inverno.
     - cron: "15 12 * * *"
     - cron: "15 18 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      semana:
+        description: "Enviar já o resumo da semana (teste)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,3 +66,4 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OWNER_USER_ID: ${{ vars.OWNER_USER_ID }}
+          FORCE_WEEKLY: ${{ inputs.semana && '1' || '' }}

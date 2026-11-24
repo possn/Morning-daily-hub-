@@ -59,7 +59,13 @@ async function config(): Promise<Record<string, string>> {
 
 type Row = { title: string; start_at: string; end_at: string; all_day: boolean; calendar: string | null };
 
-function compose(today: string, rows: Row[], brief: { headline?: string; emails?: unknown[] } | null) {
+type BriefLite = {
+  headline?: string;
+  emails?: unknown[];
+  weather?: { days?: { date: string; emoji: string; tmax: number; tmin: number; rain: number }[] };
+};
+
+function compose(today: string, rows: Row[], brief: BriefLite | null) {
   const todays = rows.filter((r) => {
     const s = ymdLisbon(new Date(r.start_at));
     if (!r.all_day) return s === today;
@@ -70,6 +76,8 @@ function compose(today: string, rows: Row[], brief: { headline?: string; emails?
   const duty = todays.find((r) => DUTY.test(r.title));
   const hospital = todays.filter((r) => !r.all_day && !DUTY.test(r.title) && !/fam[ií]l|feriad|holiday|anivers|birthday|dorsal|runners/i.test(r.calendar ?? ""));
   const parts: string[] = [];
+  const w = brief?.weather?.days?.find((d) => d.date === today);
+  if (w) parts.push(`${w.emoji} ${w.tmax}°/${w.tmin}°${w.rain >= 40 ? `, chuva ${w.rain}%` : ""}.`);
   if (brief?.headline) parts.push(brief.headline);
   if (hospital.length) {
     parts.push(`Hospital: ${hospital.length} ${hospital.length === 1 ? "evento" : "eventos"}, o primeiro às ${hmLisbon(new Date(hospital[0].start_at))}.`);
@@ -173,7 +181,7 @@ Deno.serve(async (req) => {
   if (body.notify !== false && body.notify !== "false" && (force || cfg.last_push_date !== today)) {
     const { data: b } = await sb
       .from("briefs").select("payload").eq("user_id", OWNER).eq("brief_date", today).maybeSingle();
-    const msg = compose(today, rows as Row[], (b?.payload as { headline?: string; emails?: unknown[] }) ?? null);
+    const msg = compose(today, rows as Row[], (b?.payload as BriefLite) ?? null);
     push = await sendPush(cfg, OWNER, msg);
     if (push.sent) await sb.from("app_config").upsert({ key: "last_push_date", value: today, updated_at: new Date().toISOString() });
   } else if (cfg.last_push_date === today) push = { sent: 0, reason: "já enviada hoje" };

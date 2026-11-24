@@ -42,6 +42,20 @@ export interface TaskItem {
   context?: string;
 }
 
+export interface WeatherDay {
+  date: string; // YYYY-MM-DD
+  label: string;
+  emoji: string;
+  tmax: number;
+  tmin: number;
+  rain: number; // probabilidade de chuva, %
+}
+
+export interface Weather {
+  place: string;
+  days: WeatherDay[];
+}
+
 export interface Brief {
   date: string; // YYYY-MM-DD (Europe/Lisbon)
   generatedAt: string;
@@ -52,6 +66,7 @@ export interface Brief {
   events: CalEvent[]; // próximos 14 dias, Google + escala (Outlook vem à parte)
   emails: EmailItem[];
   toReply?: ReplyItem[]; // com estrela ou sem resposta há mais de 2 dias
+  weather?: Weather;
   tasks: TaskItem[];
   sources: Record<string, "ok" | "erro" | "desligado">;
   aiUsed: boolean;
