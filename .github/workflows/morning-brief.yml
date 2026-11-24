@@ -1,0 +1,60 @@
+name: Brief da manhã
+
+on:
+  schedule:
+    # 05:15 UTC = 05:15 em Lisboa no inverno, 06:15 no verão.
+    # O GitHub pode atrasar crons até alguns minutos em horas de pico.
+    - cron: "15 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: morning-brief
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout do vault Obsidian (privado)
+        if: ${{ vars.OBSIDIAN_REPO != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.OBSIDIAN_REPO }}
+          token: ${{ secrets.OBSIDIAN_REPO_TOKEN }}
+          path: vault
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: job/package-lock.json
+
+      - run: npm ci
+        working-directory: job
+
+      - name: Gerar brief
+        working-directory: job
+        run: npm run brief
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_CALENDAR_IDS: ${{ vars.GOOGLE_CALENDAR_IDS }}
+          GOOGLE_DUTY_CALENDAR_ID: ${{ vars.GOOGLE_DUTY_CALENDAR_ID }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_TASK_DATABASE_IDS: ${{ vars.NOTION_TASK_DATABASE_IDS }}
+          OBSIDIAN_VAULT_PATH: ${{ vars.OBSIDIAN_REPO != '' && format('{0}/vault', github.workspace) || '' }}
+          PRIVACY_BLOCKED_DOMAINS: ${{ vars.PRIVACY_BLOCKED_DOMAINS }}
+          PRIVACY_BLOCKED_FOLDERS: ${{ vars.PRIVACY_BLOCKED_FOLDERS }}
+          PRIVACY_EXTRA_TERMS: ${{ secrets.PRIVACY_EXTRA_TERMS }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OWNER_USER_ID: ${{ vars.OWNER_USER_ID }}

@@ -1,0 +1,49 @@
+// Modelo de dados partilhado entre o job da manhã e a PWA.
+// A PWA tem uma cópia em web/src/types.ts: mantém as duas iguais.
+
+export type EventSource = "google" | "escala" | "outlook";
+
+export interface CalEvent {
+  id: string;
+  source: EventSource;
+  title: string;
+  start: string; // ISO 8601
+  end: string; // ISO 8601
+  allDay: boolean;
+  location?: string;
+  calendar?: string;
+}
+
+export interface EmailItem {
+  id: string;
+  from: string;
+  subject: string;
+  why: string;
+  action: string;
+  priority: "alta" | "media" | "baixa";
+  link: string;
+}
+
+export interface TaskItem {
+  id: string;
+  source: "notion" | "obsidian";
+  title: string;
+  due?: string; // YYYY-MM-DD
+  priority: "alta" | "media" | "baixa";
+  link?: string;
+  context?: string;
+}
+
+export interface Brief {
+  date: string; // YYYY-MM-DD (Europe/Lisbon)
+  generatedAt: string;
+  headline: string;
+  summary: string;
+  focus: string[];
+  duty: { label: string; start: string; end: string } | null;
+  events: CalEvent[]; // próximos 14 dias, Google + escala (Outlook vem à parte)
+  emails: EmailItem[];
+  tasks: TaskItem[];
+  sources: Record<string, "ok" | "erro" | "desligado">;
+  aiUsed: boolean;
+}
