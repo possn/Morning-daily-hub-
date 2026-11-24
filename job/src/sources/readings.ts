@@ -86,7 +86,7 @@ const Pick = z.object({
   items: z.array(
     z.object({
       pmid: z.string(),
-      design: z.string().describe("Tipo de estudo em português, curto (ex.: «Ensaio aleatorizado multicêntrico», «Coorte retrospetiva»)"),
+      design: z.string().describe("Tipo de estudo em português, no máximo 5 palavras (ex.: «Ensaio aleatorizado multicêntrico», «Coorte retrospetiva»)"),
       summary: z.string().describe("2 frases em português europeu: pergunta/população e resultado principal com números se existirem"),
     }),
   ).describe("Os 5 artigos mais relevantes para a prática em cuidados intensivos pediátricos, por ordem"),
@@ -112,7 +112,7 @@ export async function fetchReadings(days = 7): Promise<Reading[]> {
     pmid: a.pmid,
     title: a.title.slice(0, 300),
     journal: a.journal,
-    design: design.slice(0, 60),
+    design: design.length > 70 ? `${design.slice(0, 69)}…` : design,
     summary: summary.slice(0, 500),
     link: `https://pubmed.ncbi.nlm.nih.gov/${a.pmid}/`,
   });
