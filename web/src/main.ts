@@ -1,6 +1,7 @@
 import "./styles.css";
 import type { Brief, CalEvent, EmailItem, TaskItem } from "./types";
 import { clearCache, fetchSnapshot, isDemo, readCache, sb, type Snapshot } from "./data";
+import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
 const LOCALE = "pt-PT";
@@ -76,10 +77,43 @@ const SOURCE_LABEL: Record<CalEvent["source"], string> = { google: "Pessoal", es
 
 function header(brief: Brief | null): string {
   const now = new Date();
+  const { rise, set } = sunTimes(now);
+  const phase = sunPhase(now, rise, set);
   const h = now.getHours();
-  const greet = h < 12 ? "Bom dia" : h < 20 ? "Boa tarde" : "Boa noite";
+  const greet = h < 6 ? "Boa noite" : h < 13 ? "Bom dia" : h < 20 ? "Boa tarde" : "Boa noite";
+
+  // Posição do sol no arco: 0 = nascer, 1 = pôr. De noite fica pousado no horizonte.
+  const span = set.getTime() - rise.getTime();
+  const raw = (now.getTime() - rise.getTime()) / span;
+  const t = Math.min(1, Math.max(0, raw));
+  const R = 132, CX = 160, CY = 150;
+  const ang = Math.PI * (1 - t);
+  const sx = CX + R * Math.cos(ang);
+  const sy = CY - R * Math.sin(ang);
+  const night = phase === "noite";
+  const nightX = raw < 0 ? CX - R : CX + R;
+  const dash = Math.PI * R; // comprimento do arco
+  const hhmm = (d: Date) => d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+
   return `
-    <header class="top">
+    <header class="hero ${phase}">
+      <svg class="sky" viewBox="0 0 320 172" aria-hidden="true">
+        <defs>
+          <radialGradient id="glow"><stop offset="0" stop-color="var(--sun)" stop-opacity=".55"/><stop offset="1" stop-color="var(--sun)" stop-opacity="0"/></radialGradient>
+        </defs>
+        <path class="track" d="M${CX - R} ${CY} A${R} ${R} 0 0 1 ${CX + R} ${CY}" />
+        <path class="trail" d="M${CX - R} ${CY} A${R} ${R} 0 0 1 ${CX + R} ${CY}"
+          stroke-dasharray="${dash}" stroke-dashoffset="${dash * (1 - (night && raw > 1 ? 1 : t))}" />
+        <line class="horizon" x1="8" y1="${CY}" x2="312" y2="${CY}" />
+        ${
+          night
+            ? `<circle class="moon" cx="${nightX}" cy="${CY - 26}" r="11" /><circle class="moon-cut" cx="${nightX + 6}" cy="${CY - 30}" r="10" />`
+            : `<circle cx="${sx}" cy="${sy}" r="34" fill="url(#glow)" /><circle class="sun" cx="${sx}" cy="${sy}" r="13" />`
+        }
+        <text class="edge" x="${CX - R}" y="${CY + 18}" text-anchor="middle">${hhmm(rise)}</text>
+        <text class="edge" x="${CX + R}" y="${CY + 18}" text-anchor="middle">${hhmm(set)}</text>
+      </svg>
+      <div class="clock" aria-label="Hora atual">${hhmm(now)}</div>
       <p class="eyebrow">${esc(cap(now.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })))}</p>
       <h1>${greet}, Pedro</h1>
       ${brief?.headline ? `<p class="headline">${esc(brief.headline)}</p>` : ""}
@@ -145,7 +179,7 @@ function agenda(date: string, title?: string): string {
       <h2>${esc(label)}</h2>
       ${
         ev.length === 0
-          ? `<p class="empty">Sem eventos.</p>`
+          ? `<p class="empty">Nada marcado. Dia livre.</p>`
           : `<ul class="timeline">${ev
               .map((e) => {
                 const past = !e.allDay && new Date(e.end).getTime() < nowMs;
@@ -190,7 +224,7 @@ function emailsCard(emails: EmailItem[]): string {
       <h2>Emails <span class="count">${emails.length}</span></h2>
       ${
         emails.length === 0
-          ? `<p class="empty">Nada que precise de ti.</p>`
+          ? `<p class="empty">Caixa tranquila, nada precisa de ti.</p>`
           : `<ul class="list">${emails
               .map(
                 (m) => `
@@ -218,7 +252,7 @@ function tasksCard(tasks: TaskItem[]): string {
       <h2>Tarefas <span class="count">${tasks.length}</span></h2>
       ${
         tasks.length === 0
-          ? `<p class="empty">Sem tarefas pendentes.</p>`
+          ? `<p class="empty">Tudo em dia.</p>`
           : `<ul class="list">${tasks
               .map((t) => {
                 const overdue = t.due && t.due < today;
@@ -329,7 +363,8 @@ function renderMain() {
 function renderLogin(msg = "") {
   app.innerHTML = `
     <main class="wrap login">
-      <header class="top"><h1>Daily Hub</h1><p class="headline">Entra uma vez com o email e a password do teu utilizador. A sessão fica guardada.</p></header>
+      ${header(null)}
+      <p class="headline center">Entra uma vez. A sessão fica guardada neste iPhone.</p>
       <form class="card form" id="login">
         <label>Email<input name="email" type="email" autocomplete="username" required /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
@@ -410,5 +445,14 @@ document.addEventListener("visibilitychange", () => {
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
+
+// O sol e o relógio avançam sozinhos enquanto a app está aberta.
+setInterval(() => {
+  const hero = document.querySelector(".hero");
+  if (hero && document.visibilityState === "visible") hero.outerHTML = header(state.snap?.brief ?? null);
+}, 30e3);
+
+// Pede ao iOS para não apagar o armazenamento (mantém a sessão).
+navigator.storage?.persist?.().catch(() => {});
 
 void boot();
