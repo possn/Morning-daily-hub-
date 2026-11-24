@@ -134,6 +134,8 @@ Deno.serve(async (req) => {
   const seen = new Set<string>();
   for (const e of raw.slice(0, 800)) {
     if (skipCal(e.calendar)) continue;
+    // Nunca guardar eventos de doentes (nº de processo, "NP 1234567"), venham de que calendário vierem.
+    if (/\bNP\s*[.:#-]?\s*\d{5,}/i.test(String(e.title ?? ""))) continue;
     const start = toIso(e.start);
     const end = toIso(e.end) ?? start;
     // Ignora marcadores sem texto ("*") e duplicados entre calendários (ex.: feriados em dois calendários).
