@@ -1,6 +1,6 @@
 import "./styles.css";
-import type { Brief, CalEvent, EmailItem, ReplyItem, TaskItem, Weather } from "./types";
-import { addTask, callFn, clearCache, updateTask, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
+import type { Brief, CalEvent, EmailItem, Reading, ReplyItem, TaskItem, Weather } from "./types";
+import { addTask, callFn, fetchTraffic, type Traffic, clearCache, updateTask, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
@@ -172,7 +172,6 @@ function dutyBanner(): string {
         <p class="duty-when">${when} · Escala</p>
         <p class="duty-title">${esc(e.title)}</p>
         <p class="muted">${e.allDay ? "Dia inteiro" : `${time(e.start)} – ${time(e.end)}`}</p>
-        ${now ? `<a class="link route" href="${HOSPITAL_ROUTE}" target="_blank" rel="noopener">🚗 Trânsito para o hospital</a>` : ""}
       </div>
     </section>`;
 }
@@ -269,6 +268,7 @@ function emailsCard(emails: EmailItem[], toReply: ReplyItem[] = []): string {
                   </span>
                   <span class="chev" aria-hidden="true">›</span>
                 </a>
+                ${m.task ? quickTask(`e:${m.id}`, m.task, m.due) : ""}
                 ${r ? draftRow(r.id) : ""}
               </li>`;
   });
@@ -309,6 +309,129 @@ function draftRow(threadId: string): string {
   return `<p class="act"><button class="link" data-draft="${esc(threadId)}">✍️ Preparar rascunho de resposta</button>${
     st?.msg ? ` <span class="${st.err ? "err" : "muted"}">${esc(st.msg)}</span>` : ""
   }</p>`;
+}
+
+// ---------- tarefas criadas a partir de emails e leituras ----------
+const quickDone = new Set<string>();
+const shortDate = (d: string) =>
+  new Date(`${d}T12:00:00`).toLocaleDateString(LOCALE, { weekday: "short", day: "numeric", month: "short" }).replace(".", "");
+
+function quickTask(key: string, title: string, due?: string, label = "Criar tarefa", showTitle = true): string {
+  const exists = allTasks().some((t) => t.title.trim().toLowerCase() === title.trim().toLowerCase());
+  if (quickDone.has(key) || exists) return `<p class="act ok">✓ Nas tarefas</p>`;
+  return `<p class="act"><button class="link" data-qtask="${esc(key)}" data-title="${esc(title)}" data-due="${esc(due ?? "")}">＋ ${esc(label)}${showTitle ? `: ${esc(title)}` : ""}${
+    due ? ` <span class="muted">· até ${esc(shortDate(due))}</span>` : ""
+  }</button></p>`;
+}
+
+function readingsCard(items: Reading[] | undefined): string {
+  if (!items?.length) return "";
+  return `
+    <section class="card">
+      <h2>Leituras da semana <span class="count">${items.length}</span></h2>
+      <ul class="list">${items
+        .map(
+          (r) => `
+        <li>
+          <a class="row" href="${esc(safeHref(r.link))}" target="_blank" rel="noopener">
+            <span class="row-body">
+              <span class="row-title">${esc(r.title)}</span>
+              <span class="row-sub">${esc(r.journal)} · ${esc(r.design)}</span>
+              <span class="row-note">${esc(r.summary)}</span>
+            </span>
+            <span class="chev" aria-hidden="true">›</span>
+          </a>
+          ${quickTask(`r:${r.pmid}`, `Ler: ${r.title.length > 110 ? `${r.title.slice(0, 107)}…` : r.title}`, undefined, "Guardar para ler", false)}
+        </li>`,
+        )
+        .join("")}</ul>
+      <p class="muted small">Artigos dos últimos 7 dias no PubMed, escolhidos e resumidos pela IA a partir do resumo publicado. Confirma no artigo antes de mudar a prática.</p>
+    </section>`;
+}
+
+// ---------- trânsito até ao hospital ----------
+const traffic: { busy?: boolean; data?: Traffic; at?: number; err?: string; nokey?: boolean } = {};
+
+/** Próximo compromisso no hospital hoje (escala ou calendário do hospital), ainda por começar. */
+function nextHospital(): CalEvent | undefined {
+  const now = Date.now();
+  const today = ymd(new Date());
+  return allEvents().find(
+    (e) => (e.source === "outlook" || e.source === "escala") && !e.allDay && e.start.slice(0, 10) === today && Date.parse(e.start) > now,
+  );
+}
+
+function showTraffic(): boolean {
+  const day = new Date().getDay();
+  const today = ymd(new Date());
+  const hospitalToday = eventsOn(today).some((e) => e.source === "outlook" || e.source === "escala");
+  return (day >= 1 && day <= 5 && new Date().getHours() < 20) || hospitalToday;
+}
+
+function trafficCard(): string {
+  if (!showTraffic()) return "";
+  const next = nextHospital();
+  const t = traffic.data;
+  let line = "";
+  if (traffic.busy) line = `<span class="muted">A calcular…</span>`;
+  else if (t) {
+    const leave = next ? new Date(Date.parse(next.start) - (t.minutes + 5) * 60e3) : null;
+    line = `<strong>${t.minutes} min</strong> até ao hospital agora${t.delay >= 2 ? ` <span class="pill ${t.delay >= 10 ? "alta" : "media"}">+${t.delay} trânsito</span>` : ` <span class="muted">· sem trânsito</span>`}${
+      leave ? `<br><span class="muted">Para ${esc(time(next!.start))} (${esc(next!.title)}), sai até às ${esc(time(leave.toISOString()))}.</span>` : ""
+    }`;
+  } else if (traffic.nokey) line = `<span class="muted">Tempo em direto ainda não ligado.</span>`;
+  else line = `<button class="link" data-action="transito">Ver tempo com trânsito</button>${traffic.err ? ` <span class="err">${esc(traffic.err)}</span>` : ""}`;
+  return `
+    <section class="card traffic">
+      <div class="traffic-ico" aria-hidden="true">🚗</div>
+      <div class="traffic-body">
+        <p>${line}</p>
+        <p class="act"><a class="link" href="${HOSPITAL_ROUTE}" target="_blank" rel="noopener">Abrir no Maps</a>${
+          t && !traffic.busy ? ` · <button class="link" data-action="transito">Atualizar</button>` : ""
+        }</p>
+      </div>
+    </section>`;
+}
+
+async function loadTraffic() {
+  if (!("geolocation" in navigator)) {
+    traffic.err = "Localização indisponível.";
+    return renderMain();
+  }
+  traffic.busy = true;
+  traffic.err = "";
+  renderMain();
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const r = await fetchTraffic(pos.coords.latitude, pos.coords.longitude);
+      traffic.busy = false;
+      if ("error" in r) {
+        if (r.code === "no_key") traffic.nokey = true;
+        else traffic.err = "Não consegui calcular.";
+      } else {
+        traffic.data = r;
+        traffic.at = Date.now();
+      }
+      renderMain();
+    },
+    () => {
+      traffic.busy = false;
+      traffic.err = "Sem acesso à localização.";
+      renderMain();
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60e3 },
+  );
+}
+
+/** Se a localização já foi autorizada, calcula sozinho ao abrir a app (no máximo a cada 5 min). */
+async function autoTraffic() {
+  if (!showTraffic() || traffic.busy || (traffic.at && Date.now() - traffic.at < 5 * 60e3)) return;
+  try {
+    const p = await navigator.permissions?.query({ name: "geolocation" as PermissionName });
+    if (p?.state === "granted") void loadTraffic();
+  } catch {
+    /* Safari antigo: fica o botão */
+  }
 }
 
 // ---------- faixas do dia ----------
@@ -480,6 +603,7 @@ function sideMenu(): string {
       ${item('data-goto="resumo"', "✨", "Resumo")}
       ${item('data-goto="emails"', "✉️", "Emails", n(b ? [...b.emails.map((m) => threadOf(m.link)), ...(b.toReply ?? []).map((r) => r.id)].filter((v, i, a) => !v || a.indexOf(v) === i) : undefined))}
       ${item('data-goto="tarefas"', "✅", "Tarefas", n(allTasks()))}
+      ${b?.readings?.length ? item('data-goto="leituras"', "📚", "Leituras", n(b.readings)) : ""}
       ${
         isDemo
           ? ""
@@ -509,16 +633,18 @@ function renderMain() {
       resumo: b ? summaryCard(b) : "",
       emails: b ? emailsCard(b.emails, b.toReply) : "",
       tarefas: tasksCard(allTasks()),
+      leituras: b ? readingsCard(b.readings) : "",
     };
     const ordem: Record<Faixa, (keyof typeof c)[]> = {
-      manha: ["agenda", "tarefas", "emails", "resumo"],
-      tarde: ["agenda", "tarefas", "emails", "resumo"],
-      fecho: ["agenda", "tarefas", "emails", "resumo"],
-      "fim-de-semana": ["agenda", "tarefas", "resumo", "emails"],
-      vespera: ["agenda", "tarefas", "resumo", "emails"],
+      manha: ["agenda", "tarefas", "emails", "resumo", "leituras"],
+      tarde: ["agenda", "tarefas", "emails", "resumo", "leituras"],
+      fecho: ["agenda", "tarefas", "emails", "resumo", "leituras"],
+      "fim-de-semana": ["agenda", "tarefas", "leituras", "resumo", "emails"],
+      vespera: ["agenda", "tarefas", "leituras", "resumo", "emails"],
     };
     body = `
       ${dutyBanner()}
+      ${trafficCard()}
       ${stale ? `<p class="stale">A mostrar o brief de ${esc(b!.date)}. O de hoje ainda não foi gerado.</p>` : ""}
       ${weekStrip()}
       <p class="faixa">${FAIXA_TEXTO[faixa]}</p>
@@ -653,8 +779,24 @@ function renderLogin(msg = "") {
 // ---------- eventos ----------
 
 app.addEventListener("click", async (ev) => {
-  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto],[data-draft],[data-task]");
+  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto],[data-draft],[data-task],[data-qtask]");
   if (!t) return;
+  if (t.dataset.qtask) {
+    const key = t.dataset.qtask;
+    t.setAttribute("disabled", "");
+    const r = await addTask(t.dataset.title ?? "", t.dataset.due || undefined);
+    if (typeof r === "string") taskMsg = r;
+    else {
+      quickDone.add(key);
+      if (state.snap) state.snap.tasks = [...(state.snap.tasks ?? []), r];
+    }
+    renderMain();
+    return;
+  }
+  if (t.dataset.action === "transito") {
+    void loadTraffic();
+    return;
+  }
   if (t.dataset.draft) {
     const id = t.dataset.draft;
     draftState[id] = { busy: true };
@@ -757,6 +899,7 @@ async function boot() {
   renderMain();
   await refresh();
   void syncPush();
+  void autoTraffic();
 }
 
 // Nova tarefa (Enter ou +).
@@ -793,6 +936,7 @@ document.addEventListener("visibilitychange", () => {
     state.selected = ymd(new Date());
     void refresh();
   }
+  void autoTraffic();
 });
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {

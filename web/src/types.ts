@@ -21,6 +21,8 @@ export interface EmailItem {
   action: string;
   priority: "alta" | "media" | "baixa";
   link: string;
+  task?: string; // tarefa sugerida a partir do email
+  due?: string; // prazo do email, YYYY-MM-DD
 }
 
 export interface ReplyItem {
@@ -56,6 +58,15 @@ export interface Weather {
   days: WeatherDay[];
 }
 
+export interface Reading {
+  pmid: string;
+  title: string;
+  journal: string;
+  design: string; // ex.: "Ensaio aleatorizado", "Meta-análise"
+  summary: string; // 2 frases em português
+  link: string;
+}
+
 export interface Brief {
   date: string; // YYYY-MM-DD (Europe/Lisbon)
   generatedAt: string;
@@ -67,6 +78,7 @@ export interface Brief {
   emails: EmailItem[];
   toReply?: ReplyItem[]; // com estrela ou sem resposta há mais de 2 dias
   weather?: Weather;
+  readings?: Reading[]; // leituras da semana (PubMed), renovadas ao domingo
   tasks: TaskItem[];
   sources: Record<string, "ok" | "erro" | "desligado">;
   aiUsed: boolean;

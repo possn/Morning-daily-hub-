@@ -5,10 +5,12 @@ import { fetchCalendarEvents, fetchEmails, fetchToReply, type RawEmail } from ".
 import { fetchNotionTasks } from "./sources/notion.js";
 import { fetchObsidianTasks } from "./sources/obsidian.js";
 import { buildWithAI } from "./ai.js";
-import { fetchAppTasks, saveBrief } from "./store.js";
+import { cachedReadings, fetchAppTasks, saveBrief } from "./store.js";
 import { fetchWeather } from "./sources/weather.js";
-import { maybeSendWeekly } from "./weekly.js";
-import type { Brief, CalEvent, ReplyItem, TaskItem, Weather } from "./types.js";
+import { isSundayEvening, maybeSendWeekly } from "./weekly.js";
+import { maybeSendEvening } from "./evening.js";
+import { fetchReadings } from "./sources/readings.js";
+import type { Brief, CalEvent, Reading, ReplyItem, TaskItem, Weather } from "./types.js";
 
 async function attempt<T>(name: string, fallback: T, fn: () => Promise<T>, status: Brief["sources"]): Promise<T> {
   try {
@@ -37,6 +39,13 @@ async function main() {
     attempt<TaskItem[]>("tarefas", [], fetchAppTasks, sources),
   ]);
   const tasks = [...appTasks, ...notion, ...obsidian];
+  const refreshReadings = process.env.FORCE_WEEKLY === "1" || isSundayEvening();
+  const readings = await attempt<{ items: Reading[]; fresh: boolean }>(
+    "leituras",
+    { items: [], fresh: false },
+    () => cachedReadings(today, refreshReadings, fetchReadings),
+    sources,
+  );
 
   const todays = events.filter((e) => e.start.slice(0, 10) === today);
   const dutyEvent = todays.find((e) => e.source === "escala");
@@ -64,6 +73,7 @@ async function main() {
       })),
     toReply,
     weather,
+    readings: readings.items,
     tasks: tasks.slice(0, 8),
     sources,
     aiUsed: false,
@@ -89,9 +99,14 @@ async function main() {
     await saveBrief(brief);
     console.log(`Brief de ${today} guardado. Fontes:`, sources);
     try {
-      console.log("Resumo da semana:", await maybeSendWeekly(today, weather));
+      console.log("Resumo da semana:", await maybeSendWeekly(today, weather, readings.fresh ? readings.items.length : 0));
     } catch (err) {
       console.error("[semana] falhou:", (err as Error).message);
+    }
+    try {
+      console.log("Fecho do dia:", await maybeSendEvening(today, events, appTasks, toReply));
+    } catch (err) {
+      console.error("[fecho] falhou:", (err as Error).message);
     }
   }
 }

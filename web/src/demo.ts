@@ -38,9 +38,13 @@ export function demoBrief(): Brief {
       { id: "e2", source: "escala", title: "Urgência noite", start: iso(6, 20, 0), end: iso(7, 9, 0), allDay: false, calendar: "Escala" },
     ],
     emails: [
-      { id: "m1", from: "Coordenação UCIP", subject: "Escala de dezembro: trocas até 28/11", why: "Prazo esta semana para pedir trocas", action: "Confirmar disponibilidade", priority: "alta", link: "#" },
-      { id: "m2", from: "Secretariado do congresso", subject: "Submissão de resumos: último aviso", why: "Prazo na sexta", action: "Submeter o resumo", priority: "media", link: "#" },
+      { id: "m1", from: "Coordenação UCIP", subject: "Escala de dezembro: trocas até 28/11", why: "Prazo esta semana para pedir trocas", action: "Confirmar disponibilidade", priority: "alta", link: "#", task: "Pedir trocas da escala de dezembro", due: ymd(4) },
+      { id: "m2", from: "Secretariado do congresso", subject: "Submissão de resumos: último aviso", why: "Prazo na sexta", action: "Submeter o resumo", priority: "media", link: "#", task: "Submeter resumo ao congresso", due: ymd(3) },
       { id: "m3", from: "Banco", subject: "Extrato disponível", why: "Informativo", action: "Ver quando der", priority: "baixa", link: "#" },
+    ],
+    readings: [
+      { pmid: "1", title: "Exemplo: oxigenoterapia conservadora em crianças ventiladas", journal: "Pediatr Crit Care Med", design: "Ensaio aleatorizado", summary: "Texto de demonstração. Aqui aparece o resumo em duas frases com o resultado principal.", link: "https://pubmed.ncbi.nlm.nih.gov/" },
+      { pmid: "2", title: "Exemplo: fluidos na sépsis pediátrica", journal: "Lancet Child Adolesc Health", design: "Meta-análise", summary: "Texto de demonstração.", link: "https://pubmed.ncbi.nlm.nih.gov/" },
     ],
     toReply: [
       { id: "r1", from: "Secretariado do internato", subject: "Avaliação intercalar: marcar data", days: 4, starred: false, link: "#" },

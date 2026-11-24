@@ -172,6 +172,23 @@ type TaskRow = { id: string; title: string; due: string | null; priority: TaskIt
 const rowToTask = (r: TaskRow): TaskItem => ({ id: `a:${r.id}`, source: "app", title: r.title, due: r.due ?? undefined, priority: r.priority });
 const demoTasks: TaskItem[] = [];
 
+// Tempo até ao hospital com trânsito (função «traffic»; a posição não é guardada).
+export type Traffic = { minutes: number; delay: number; usual: number | null; km: number };
+export async function fetchTraffic(lat: number, lon: number): Promise<Traffic | { error: string; code?: string }> {
+  if (isDemo || !sb) return { minutes: 24, delay: 7, usual: 17, km: 15.2 };
+  const { data, error } = await sb.functions.invoke("traffic", { body: { lat, lon } });
+  if (error) {
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const j = ctx ? await ctx.json() : null;
+      return { error: j?.error ?? error.message, code: j?.code };
+    } catch {
+      return { error: error.message };
+    }
+  }
+  return data as Traffic;
+}
+
 export async function addTask(title: string, due?: string): Promise<TaskItem | string> {
   const clean = title.trim().slice(0, 300);
   if (!clean) return "Escreve a tarefa.";
