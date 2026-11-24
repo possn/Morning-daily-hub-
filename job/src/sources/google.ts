@@ -13,10 +13,18 @@ export interface RawEmail {
   labels: string[];
 }
 
-let cachedToken: string | undefined;
+let cachedToken: Promise<string> | undefined;
 
-async function accessToken(): Promise<string> {
-  if (cachedToken) return cachedToken;
+// Um único pedido de token, partilhado por todas as chamadas em paralelo.
+function accessToken(): Promise<string> {
+  cachedToken ??= newToken().catch((e) => {
+    cachedToken = undefined;
+    throw e;
+  });
+  return cachedToken;
+}
+
+async function newToken(): Promise<string> {
   const { clientId, clientSecret, refreshToken } = config.google;
   if (!clientId || !clientSecret || !refreshToken) throw new Error("Google OAuth não configurado");
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -30,14 +38,37 @@ async function accessToken(): Promise<string> {
     }),
   });
   if (!res.ok) throw new Error(`Google token HTTP ${res.status}`);
-  cachedToken = ((await res.json()) as { access_token: string }).access_token;
-  return cachedToken;
+  return ((await res.json()) as { access_token: string }).access_token;
+}
+
+// O Gmail recusa (HTTP 429) demasiados pedidos em simultâneo do mesmo utilizador.
+// Por isso: no máximo 4 pedidos ao mesmo tempo, e nova tentativa com espera crescente em 429/5xx.
+const MAX_PARALLEL = 4;
+let active = 0;
+const queue: (() => void)[] = [];
+async function slot<T>(fn: () => Promise<T>): Promise<T> {
+  if (active >= MAX_PARALLEL) await new Promise<void>((r) => queue.push(r));
+  active++;
+  try {
+    return await fn();
+  } finally {
+    active--;
+    queue.shift()?.();
+  }
 }
 
 async function gget<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { authorization: `Bearer ${await accessToken()}` } });
-  if (!res.ok) throw new Error(`Google HTTP ${res.status} em ${new URL(url).pathname.split("/").slice(0, 4).join("/")}`);
-  return (await res.json()) as T;
+  for (let attempt = 0; ; attempt++) {
+    const res = await slot(async () => fetch(url, { headers: { authorization: `Bearer ${await accessToken()}` } }));
+    if (res.ok) return (await res.json()) as T;
+    const retry = res.status === 429 || res.status >= 500;
+    if (!retry || attempt >= 4) {
+      throw new Error(`Google HTTP ${res.status} em ${new URL(url).pathname.split("/").slice(0, 4).join("/")}`);
+    }
+    await res.body?.cancel();
+    const wait = Number(res.headers.get("retry-after")) * 1000 || 500 * 2 ** attempt + Math.random() * 250;
+    await new Promise((r) => setTimeout(r, Math.min(wait, 8000)));
+  }
 }
 
 // ---------- Gmail ----------
