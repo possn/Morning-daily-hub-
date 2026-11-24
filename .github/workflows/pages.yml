@@ -29,10 +29,7 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
-        env:
-          # Ambos são públicos por desenho (a chave publishable/anon). Sem eles, publica em modo demonstração.
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        # URL e chave publishable vêm de web/.env.production (públicos por desenho).
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
