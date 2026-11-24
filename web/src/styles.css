@@ -358,3 +358,12 @@ body.menu-open { overflow: hidden; }
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* trânsito até ao hospital */
+.traffic { display: flex; gap: 14px; align-items: center; padding-top: 14px; padding-bottom: 14px; }
+.traffic-ico { font-size: 26px; line-height: 1; }
+.traffic-body p { margin: 0; }
+.traffic-body .act { margin-top: 6px; }
+.traffic .pill { margin-left: 4px; vertical-align: 1px; }
+.small { font-size: 12px; margin-top: 10px; }
+.traffic .pill { white-space: nowrap; }

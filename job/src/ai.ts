@@ -18,6 +18,8 @@ const BriefSchema = z.object({
       why: z.string().describe("Porque é relevante, uma frase"),
       action: z.string().describe("Ação concreta sugerida, curta"),
       priority: Priority,
+      task: z.string().nullable().describe("Se o email pede algo a fazer, a tarefa em poucas palavras começando por um verbo (ex.: «Submeter resumo ao congresso»); senão null"),
+      due: z.string().nullable().describe("Prazo explícito no email em YYYY-MM-DD, calculado a partir de hoje; null se não houver prazo"),
     }),
   ).describe("Só os emails que exigem atenção ou ação; ignora newsletters e notificações automáticas"),
   tasks: z.array(
@@ -83,7 +85,8 @@ export async function buildWithAI(
     allDay: e.allDay,
   }));
 
-  const input = { hoje: today, agenda_hoje_e_amanha: eventLines, emails: emailLines, tarefas: taskLines };
+  const diaSemana = new Date(`${today}T12:00:00Z`).toLocaleDateString("pt-PT", { weekday: "long", timeZone: "UTC" });
+  const input = { hoje: today, dia_da_semana: diaSemana, agenda_hoje_e_amanha: eventLines, emails: emailLines, tarefas: taskLines };
 
   const response = await client.beta.messages.parse({
     model: config.model,
@@ -117,6 +120,8 @@ export async function buildWithAI(
         action: x.action,
         priority: x.priority,
         link: `https://mail.google.com/mail/u/0/#all/${e.threadId}`,
+        ...(x.task && !blocked ? { task: x.task.slice(0, 200) } : {}),
+        ...(x.due && /^\d{4}-\d{2}-\d{2}$/.test(x.due) && x.due >= today ? { due: x.due } : {}),
       }];
     }),
     tasks: out.tasks.flatMap((x) => {

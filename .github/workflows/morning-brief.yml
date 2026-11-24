@@ -14,6 +14,10 @@ on:
         description: "Enviar já o resumo da semana (teste)"
         type: boolean
         default: false
+      fecho:
+        description: "Enviar já o fecho do dia (teste)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -67,3 +71,4 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OWNER_USER_ID: ${{ vars.OWNER_USER_ID }}
           FORCE_WEEKLY: ${{ inputs.semana && '1' || '' }}
+          FORCE_EVENING: ${{ inputs.fecho && '1' || '' }}

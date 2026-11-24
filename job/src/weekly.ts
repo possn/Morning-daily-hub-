@@ -1,19 +1,19 @@
 // Resumo da semana: ao domingo à noite (corrida das 18:15), uma notificação com
 // os turnos, a carga do hospital e o tempo dos próximos 7 dias.
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import webpush from "web-push";
+import { createClient } from "@supabase/supabase-js";
+import { loadConfig, sendPush, setConfig } from "./push.js";
 import { config, TZ } from "./config.js";
 import { addDays, localDate } from "./time.js";
 import type { Weather } from "./types.js";
 
-const DUTY = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
-const PERSONAL = /fam[ií]l|feriad|holiday|anivers|birthday|dorsal|runners/i;
+export const DUTY = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+export const PERSONAL = /fam[ií]l|feriad|holiday|anivers|birthday|dorsal|runners/i;
 
-type Row = { title: string; start_at: string; all_day: boolean; calendar: string | null };
+export type Row = { title: string; start_at: string; all_day: boolean; calendar: string | null };
 
 const weekday = (date: string) =>
   new Date(`${date}T12:00:00Z`).toLocaleDateString("pt-PT", { weekday: "short", timeZone: "UTC" }).replace(".", "");
-const hm = (iso: string) => new Date(iso).toLocaleTimeString("pt-PT", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+export const hm = (iso: string) => new Date(iso).toLocaleTimeString("pt-PT", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
 export function isSundayEvening(now = new Date()): boolean {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", hour: "2-digit", hour12: false }).formatToParts(now);
@@ -49,36 +49,14 @@ export function composeWeek(today: string, rows: Row[], weather?: Weather): { ti
   return { title: "A tua semana", body: parts.join(" ") };
 }
 
-async function sendPush(sb: SupabaseClient, cfg: Record<string, string>, owner: string, msg: { title: string; body: string }) {
-  if (!cfg.vapid_public || !cfg.vapid_private) return 0;
-  webpush.setVapidDetails(cfg.vapid_subject || "https://possn.github.io", cfg.vapid_public, cfg.vapid_private);
-  const { data: subs } = await sb.from("push_subscriptions").select("endpoint,p256dh,auth").eq("user_id", owner);
-  let sent = 0;
-  for (const s of subs ?? []) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify({ ...msg, url: "./" }),
-        { TTL: 6 * 3600, urgency: "normal" },
-      );
-      sent++;
-    } catch (e) {
-      const code = (e as { statusCode?: number }).statusCode;
-      if (code === 404 || code === 410) await sb.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
-    }
-  }
-  return sent;
-}
-
 /** Envia o resumo da semana uma vez por domingo (ou sempre, com FORCE_WEEKLY=1). */
-export async function maybeSendWeekly(today: string, weather?: Weather): Promise<string> {
+export async function maybeSendWeekly(today: string, weather?: Weather, readings = 0): Promise<string> {
   const force = process.env.FORCE_WEEKLY === "1";
   if (!force && !isSundayEvening()) return "fora de horas";
   const { url, serviceKey, ownerUserId } = config.supabase;
   if (!url || !serviceKey || !ownerUserId) return "sem Supabase";
   const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const { data: cfgRows } = await sb.from("app_config").select("key,value");
-  const cfg = Object.fromEntries((cfgRows ?? []).map((r) => [r.key, r.value])) as Record<string, string>;
+  const cfg = await loadConfig(sb);
   if (!force && cfg.last_week_push === today) return "já enviado";
 
   const { data: rows, error } = await sb
@@ -90,7 +68,9 @@ export async function maybeSendWeekly(today: string, weather?: Weather): Promise
     .limit(500);
   if (error) throw new Error(`Supabase: ${error.code ?? "erro"}`);
 
-  const sent = await sendPush(sb, cfg, ownerUserId, composeWeek(today, rows ?? [], weather));
-  if (sent) await sb.from("app_config").upsert({ key: "last_week_push", value: today, updated_at: new Date().toISOString() });
+  const msg = composeWeek(today, rows ?? [], weather);
+  if (readings) msg.body += ` Leituras: ${readings} ${readings === 1 ? "artigo novo" : "artigos novos"} na app.`;
+  const sent = await sendPush(sb, cfg, ownerUserId, msg);
+  if (sent) await setConfig(sb, "last_week_push", today);
   return `enviado a ${sent}`;
 }

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { config } from "./config.js";
-import type { Brief, TaskItem } from "./types.js";
+import type { Brief, Reading, TaskItem } from "./types.js";
 
 export async function saveBrief(brief: Brief): Promise<void> {
   const { url, serviceKey, ownerUserId } = config.supabase;
@@ -33,4 +33,30 @@ export async function fetchAppTasks(): Promise<TaskItem[]> {
     due: (r.due as string | null) ?? undefined,
     priority: r.priority as TaskItem["priority"],
   }));
+}
+
+/**
+ * Leituras da semana guardadas em app_config («readings»), para não pesquisar o PubMed a cada corrida.
+ * Renova ao domingo à noite, quando não há nada guardado ou quando o que há tem mais de 7 dias.
+ */
+export async function cachedReadings(
+  today: string,
+  refreshNow: boolean,
+  fetcher: () => Promise<Reading[]>,
+): Promise<{ items: Reading[]; fresh: boolean }> {
+  const { url, serviceKey } = config.supabase;
+  if (!url || !serviceKey) return { items: await fetcher(), fresh: true };
+  const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const { data } = await sb.from("app_config").select("value").eq("key", "readings").maybeSingle();
+  let saved: { date?: string; items?: Reading[] } = {};
+  try {
+    saved = data?.value ? JSON.parse(data.value as string) : {};
+  } catch { /* valor antigo inválido */ }
+  const old = !saved.date || saved.date <= new Date(Date.parse(`${today}T12:00:00Z`) - 7 * 864e5).toISOString().slice(0, 10);
+  if (!old && !(refreshNow && saved.date !== today)) return { items: saved.items ?? [], fresh: false };
+  const items = await fetcher();
+  if (items.length) {
+    await sb.from("app_config").upsert({ key: "readings", value: JSON.stringify({ date: today, items }), updated_at: new Date().toISOString() });
+  }
+  return { items: items.length ? items : (saved.items ?? []), fresh: items.length > 0 };
 }
