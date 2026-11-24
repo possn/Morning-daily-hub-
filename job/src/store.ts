@@ -4,7 +4,8 @@ import type { Brief } from "./types.js";
 
 export async function saveBrief(brief: Brief): Promise<void> {
   const { url, serviceKey, ownerUserId } = config.supabase;
-  if (!url || !serviceKey || !ownerUserId) throw new Error("Supabase não configurado");
+  const missing = [!url && "SUPABASE_URL", !serviceKey && "SUPABASE_SERVICE_ROLE_KEY", !ownerUserId && "OWNER_USER_ID"].filter(Boolean);
+  if (!url || !serviceKey || !ownerUserId) throw new Error(`Supabase não configurado: falta ${missing.join(", ")}`);
   const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
   const { error } = await sb
     .from("briefs")
