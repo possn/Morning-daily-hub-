@@ -253,7 +253,8 @@ const dias = (n: number) => (n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n
 function emailsCard(emails: EmailItem[], toReply: ReplyItem[] = []): string {
   const replyById = new Map(toReply.map((r) => [r.id, r]));
   const shown = new Set<string>();
-  const top = emails.map((m) => {
+  const order = { alta: 0, media: 1, baixa: 2 } as const;
+  const top = [...emails].sort((a, b) => order[a.priority] - order[b.priority]).map((m) => {
     const id = threadOf(m.link);
     const r = id ? replyById.get(id) : undefined;
     if (id) shown.add(id);
@@ -288,14 +289,25 @@ function emailsCard(emails: EmailItem[], toReply: ReplyItem[] = []): string {
         </li>`,
   );
   const total = emails.length + rest.length;
+  // Só os 3 primeiros à vista (primeiro os que pedem ação, depois os que esperam resposta).
+  const all = [...top, ...restHtml.map((h, i) => (i === 0 ? `<li class="subhead-li"><p class="subhead">À espera de resposta</p></li>${h}` : h))];
+  const MAX = 3;
+  const visible = emailsOpen ? all : all.slice(0, MAX);
+  const hidden = all.length - MAX;
   return `
     <section class="card">
-      <h2>Emails <span class="count">${total}</span></h2>
-      ${total === 0 ? `<p class="empty">Caixa tranquila, nada precisa de ti.</p>` : ""}
-      ${top.length ? `<ul class="list">${top.join("")}</ul>` : ""}
-      ${rest.length ? `<p class="subhead">À espera de resposta</p><ul class="list">${restHtml.join("")}</ul>` : ""}
+      <div class="card-head">
+        <h2>Emails <span class="count">${total}</span></h2>
+        <span class="mail-apps">
+          <a class="link" href="https://mail.google.com/mail/u/0/" target="_blank" rel="noopener">Gmail</a>
+          <a class="link" href="ms-outlook://">Outlook</a>
+        </span>
+      </div>
+      ${total === 0 ? `<p class="empty">Caixa tranquila, nada precisa de ti.</p>` : `<ul class="list">${visible.join("")}</ul>`}
+      ${hidden > 0 ? `<p class="act"><button class="link" data-action="mais-emails">${emailsOpen ? "Ver menos" : `Ver mais ${hidden}`}</button></p>` : ""}
     </section>`;
 }
+let emailsOpen = false;
 
 // Estado dos rascunhos e ações nas tarefas (por id), só nesta sessão.
 const draftState: Record<string, { busy?: boolean; msg?: string; link?: string; err?: boolean }> = {};
@@ -775,7 +787,9 @@ app.addEventListener("click", async (ev) => {
   }
   const fromMenu = !!t.closest(".side");
   if (fromMenu) state.menu = false;
-  if (t.dataset.action === "menu") {
+  if (t.dataset.action === "mais-emails") {
+    emailsOpen = !emailsOpen;
+  } else if (t.dataset.action === "menu") {
     state.menu = !state.menu;
   } else if (t.dataset.action === "menu-fechar") {
     state.menu = false;
