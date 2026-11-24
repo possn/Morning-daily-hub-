@@ -59,8 +59,7 @@ O vault sincronizado pelo plugin Obsidian Git tem de estar num **repositório pr
 | Secret | `OBSIDIAN_REPO_TOKEN` | passo 4 |
 | Secret | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API (nunca no frontend) |
 | Secret | `PRIVACY_EXTRA_TERMS` | opcional: termos a ocultar sempre, separados por vírgulas |
-| Variable | `SUPABASE_URL` | `https://<projeto>.supabase.co` |
-| Variable | `SUPABASE_ANON_KEY` | chave publishable/anon (pública por desenho) |
+| Variable | `SUPABASE_URL` | `https://ejtpmwhyoekgcosuwilq.supabase.co` |
 | Variable | `OWNER_USER_ID` | User UID do passo 1 |
 | Variable | `GOOGLE_CALENDAR_IDS` | ex.: `primary` (separados por vírgulas) |
 | Variable | `GOOGLE_DUTY_CALENDAR_ID` | calendário da escala |
