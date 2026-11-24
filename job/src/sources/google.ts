@@ -69,7 +69,14 @@ export async function fetchEmails(): Promise<RawEmail[]> {
       };
     }),
   );
-  return out;
+  // Avisos da própria app (falhas do workflow, alerta Google de acesso do Daily Hub) não são tarefas tuas.
+  return out.filter((e) => !isSelfNoise(e));
+}
+
+export function isSelfNoise(e: { subject: string; snippet: string; from: string }): boolean {
+  if (/\[possn\/Morning-daily-hub-?\]/i.test(e.subject)) return true;
+  if (/google/i.test(e.from) && /daily hub/i.test(`${e.subject} ${e.snippet}`)) return true;
+  return false;
 }
 
 function decodeEntities(s: string): string {
