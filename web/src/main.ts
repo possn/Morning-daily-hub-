@@ -1,6 +1,6 @@
 import "./styles.css";
 import type { Brief, CalEvent, EmailItem, Reading, ReplyItem, TaskItem, Weather } from "./types";
-import { addTask, callFn, fetchTraffic, type Traffic, clearCache, updateTask, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
+import { addTask, callFn, clearCache, updateTask, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
@@ -350,7 +350,7 @@ function readingsCard(items: Reading[] | undefined): string {
 }
 
 // ---------- trânsito até ao hospital ----------
-const traffic: { busy?: boolean; data?: Traffic; at?: number; err?: string; nokey?: boolean } = {};
+// Só a ligação para o Google Maps, que já mostra o tempo com trânsito (sem chaves nem localização na app).
 
 /** Próximo compromisso no hospital hoje (escala ou calendário do hospital), ainda por começar. */
 function nextHospital(): CalEvent | undefined {
@@ -371,67 +371,14 @@ function showTraffic(): boolean {
 function trafficCard(): string {
   if (!showTraffic()) return "";
   const next = nextHospital();
-  const t = traffic.data;
-  let line = "";
-  if (traffic.busy) line = `<span class="muted">A calcular…</span>`;
-  else if (t) {
-    const leave = next ? new Date(Date.parse(next.start) - (t.minutes + 5) * 60e3) : null;
-    line = `<strong>${t.minutes} min</strong> até ao hospital agora${t.delay >= 2 ? ` <span class="pill ${t.delay >= 10 ? "alta" : "media"}">+${t.delay} trânsito</span>` : ` <span class="muted">· sem trânsito</span>`}${
-      leave ? `<br><span class="muted">Para ${esc(time(next!.start))} (${esc(next!.title)}), sai até às ${esc(time(leave.toISOString()))}.</span>` : ""
-    }`;
-  } else if (traffic.nokey) line = `<span class="muted">Tempo em direto ainda não ligado.</span>`;
-  else line = `<button class="link" data-action="transito">Ver tempo com trânsito</button>${traffic.err ? ` <span class="err">${esc(traffic.err)}</span>` : ""}`;
   return `
     <section class="card traffic">
       <div class="traffic-ico" aria-hidden="true">🚗</div>
       <div class="traffic-body">
-        <p>${line}</p>
-        <p class="act"><a class="link" href="${HOSPITAL_ROUTE}" target="_blank" rel="noopener">Abrir no Maps</a>${
-          t && !traffic.busy ? ` · <button class="link" data-action="transito">Atualizar</button>` : ""
-        }</p>
+        <p><a class="link" href="${HOSPITAL_ROUTE}" target="_blank" rel="noopener">Ver o tempo até ao hospital no Maps</a></p>
+        ${next ? `<p class="muted">Próximo no hospital: ${esc(time(next.start))} · ${esc(next.title)}</p>` : ""}
       </div>
     </section>`;
-}
-
-async function loadTraffic() {
-  if (!("geolocation" in navigator)) {
-    traffic.err = "Localização indisponível.";
-    return renderMain();
-  }
-  traffic.busy = true;
-  traffic.err = "";
-  renderMain();
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const r = await fetchTraffic(pos.coords.latitude, pos.coords.longitude);
-      traffic.busy = false;
-      if ("error" in r) {
-        if (r.code === "no_key") traffic.nokey = true;
-        else traffic.err = "Não consegui calcular.";
-      } else {
-        traffic.data = r;
-        traffic.at = Date.now();
-      }
-      renderMain();
-    },
-    () => {
-      traffic.busy = false;
-      traffic.err = "Sem acesso à localização.";
-      renderMain();
-    },
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60e3 },
-  );
-}
-
-/** Se a localização já foi autorizada, calcula sozinho ao abrir a app (no máximo a cada 5 min). */
-async function autoTraffic() {
-  if (!showTraffic() || traffic.busy || (traffic.at && Date.now() - traffic.at < 5 * 60e3)) return;
-  try {
-    const p = await navigator.permissions?.query({ name: "geolocation" as PermissionName });
-    if (p?.state === "granted") void loadTraffic();
-  } catch {
-    /* Safari antigo: fica o botão */
-  }
 }
 
 // ---------- faixas do dia ----------
@@ -793,10 +740,6 @@ app.addEventListener("click", async (ev) => {
     renderMain();
     return;
   }
-  if (t.dataset.action === "transito") {
-    void loadTraffic();
-    return;
-  }
   if (t.dataset.draft) {
     const id = t.dataset.draft;
     draftState[id] = { busy: true };
@@ -899,7 +842,6 @@ async function boot() {
   renderMain();
   await refresh();
   void syncPush();
-  void autoTraffic();
 }
 
 // Nova tarefa (Enter ou +).
@@ -936,7 +878,6 @@ document.addEventListener("visibilitychange", () => {
     state.selected = ymd(new Date());
     void refresh();
   }
-  void autoTraffic();
 });
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
