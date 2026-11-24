@@ -137,3 +137,10 @@ export async function fetchSnapshot(): Promise<Snapshot> {
   writeCache(snap);
   return snap;
 }
+
+// Ligação do Atalho do iOS, já com o token (só para sessões com segundo fator).
+export async function shortcutUrl(): Promise<string | null> {
+  if (!sb) return null;
+  const { data, error } = await sb.rpc("shortcut_url");
+  return error || typeof data !== "string" ? null : data;
+}

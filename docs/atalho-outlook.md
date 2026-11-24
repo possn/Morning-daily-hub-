@@ -9,10 +9,8 @@ Quando o Atalho corre de manhã, a função envia também a **notificação da m
 
 ## Antes de começar
 1. O calendário do hospital tem de aparecer na app **Calendário** do iPhone. Para isso, adiciona a conta Exchange/Microsoft 365 em *Definições → Calendário → Contas*, ou, no Outlook para iOS, ativa *Definições → (conta) → Guardar calendários*.
-2. **Token**: no Supabase abre *Table Editor → app_config* e copia o valor da linha `ingest_token`.
-   (https://supabase.com/dashboard/project/ejtpmwhyoekgcosuwilq/editor)
-3. **URL da função**: `https://ejtpmwhyoekgcosuwilq.supabase.co/functions/v1/ingest-outlook`
-4. Na app Daily Hub (instalada no ecrã principal), carrega em **🔔 Ativar notificação da manhã** no fundo da página.
+2. **Ligação**: na app Daily Hub, no fundo da página, carrega em **📋 Copiar ligação para o Atalho**. Já leva o token.
+3. Na app Daily Hub (instalada no ecrã principal), carrega em **🔔 Ativar notificação da manhã** no fundo da página.
 
 ## Criar o atalho "Daily Hub"
 App **Atalhos → +**, e adiciona por esta ordem:
@@ -35,9 +33,8 @@ App **Atalhos → +**, e adiciona por esta ordem:
      - `calendar` → *Item repetido* › Calendário
    - **Adicionar à variável** → nome `Eventos`
 6. **Obter conteúdo do URL**
-   - URL: o URL da função
+   - URL: cola a ligação copiada da app
    - Método: **POST**
-   - Cabeçalhos: `Authorization` = `Bearer ` seguido do token (com um espaço depois de Bearer)
    - Corpo do pedido: **JSON**, com o campo `events` = variável `Eventos`
 
 Corre uma vez à mão. A resposta deve ser `{"ok":true,"received":N,"stored":N,"push":{"sent":1}}`, e a notificação aparece no iPhone.

@@ -1,6 +1,6 @@
 import "./styles.css";
 import type { Brief, CalEvent, EmailItem, ReplyItem, TaskItem } from "./types";
-import { clearCache, enablePush, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
+import { clearCache, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
@@ -364,6 +364,7 @@ function monthGrid(): string {
 }
 
 let notifMsg = "";
+let atalhoMsg = "";
 function notifRow(): string {
   const st = pushState();
   if (st === "indisponivel") return "";
@@ -388,6 +389,7 @@ function footer(): string {
         b ? `Brief gerado às ${time(b.generatedAt)}${b.aiUsed ? "" : " (sem IA)"}${lastOutlook}` : "Ainda não há brief para hoje."
       }</p>
       ${notifRow()}
+      ${!isDemo ? `<button class="link" data-action="atalho">📋 Copiar ligação para o Atalho</button>${atalhoMsg ? `<p class="muted">${esc(atalhoMsg)}</p>` : ""}` : ""}
       ${!isDemo ? `<button class="link" data-action="logout">Terminar sessão</button>` : ""}
     </footer>`;
 }
@@ -561,6 +563,17 @@ app.addEventListener("click", async (ev) => {
     const [y, m] = state.month.split("-").map(Number);
     const d = new Date(y, m - 1 + Number(t.dataset.month), 1);
     state.month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  } else if (t.dataset.action === "atalho") {
+    const url = await shortcutUrl();
+    if (!url) atalhoMsg = "Não consegui obter a ligação. Fecha e abre a app.";
+    else {
+      try {
+        await navigator.clipboard.writeText(url);
+        atalhoMsg = "Copiada. Cola-a no passo «Obter conteúdo do URL» do Atalho.";
+      } catch {
+        atalhoMsg = url;
+      }
+    }
   } else if (t.dataset.action === "notif") {
     notifMsg = (await enablePush()) ?? "";
   } else if (t.dataset.action === "logout") {
