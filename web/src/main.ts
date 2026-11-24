@@ -247,42 +247,34 @@ function summaryCard(b: Brief): string {
 
 const PRI: Record<EmailItem["priority"], string> = { alta: "Alta", media: "Média", baixa: "Baixa" };
 
-function emailsCard(emails: EmailItem[]): string {
-  return `
-    <section class="card">
-      <h2>Emails <span class="count">${emails.length}</span></h2>
-      ${
-        emails.length === 0
-          ? `<p class="empty">Caixa tranquila, nada precisa de ti.</p>`
-          : `<ul class="list">${emails
-              .map(
-                (m) => `
+const threadOf = (link: string) => link.match(/#[a-z]+\/([\w-]+)/i)?.[1] ?? "";
+const dias = (n: number) => (n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`);
+
+// Um só cartão: os emails que pedem ação e, a seguir, os que esperam resposta (sem repetir conversas).
+function emailsCard(emails: EmailItem[], toReply: ReplyItem[] = []): string {
+  const replyById = new Map(toReply.map((r) => [r.id, r]));
+  const shown = new Set<string>();
+  const top = emails.map((m) => {
+    const id = threadOf(m.link);
+    const r = id ? replyById.get(id) : undefined;
+    if (id) shown.add(id);
+    return `
               <li>
                 <a class="row" href="${esc(safeHref(m.link))}" target="_blank" rel="noopener">
                   <span class="pill ${m.priority}">${PRI[m.priority]}</span>
                   <span class="row-body">
-                    <span class="row-title">${esc(m.subject)}</span>
+                    <span class="row-title">${r?.starred ? "★ " : ""}${esc(m.subject)}</span>
                     <span class="row-sub">${esc(m.from)}</span>
                     <span class="row-note">${esc(m.action)}${m.why ? ` · ${esc(m.why)}` : ""}</span>
                   </span>
                   <span class="chev" aria-hidden="true">›</span>
                 </a>
-              </li>`,
-              )
-              .join("")}</ul>`
-      }
-    </section>`;
-}
-
-function replyCard(items: ReplyItem[] | undefined): string {
-  if (!items || items.length === 0) return "";
-  const dias = (n: number) => (n === 0 ? "hoje" : n === 1 ? "há 1 dia" : `há ${n} dias`);
-  return `
-    <section class="card">
-      <h2>A responder <span class="count">${items.length}</span></h2>
-      <ul class="list">${items
-        .map(
-          (m) => `
+                ${r ? draftRow(r.id) : ""}
+              </li>`;
+  });
+  const rest = toReply.filter((r) => !shown.has(r.id));
+  const restHtml = rest.map(
+    (m) => `
         <li>
           <a class="row" href="${esc(safeHref(m.link))}" target="_blank" rel="noopener">
             <span class="pill ${m.starred ? "alta" : "baixa"}">${m.starred ? "★" : dias(m.days).replace("há ", "")}</span>
@@ -294,8 +286,14 @@ function replyCard(items: ReplyItem[] | undefined): string {
           </a>
           ${draftRow(m.id)}
         </li>`,
-        )
-        .join("")}</ul>
+  );
+  const total = emails.length + rest.length;
+  return `
+    <section class="card">
+      <h2>Emails <span class="count">${total}</span></h2>
+      ${total === 0 ? `<p class="empty">Caixa tranquila, nada precisa de ti.</p>` : ""}
+      ${top.length ? `<ul class="list">${top.join("")}</ul>` : ""}
+      ${rest.length ? `<p class="subhead">À espera de resposta</p><ul class="list">${restHtml.join("")}</ul>` : ""}
     </section>`;
 }
 
@@ -480,8 +478,7 @@ function sideMenu(): string {
       <p class="side-sec">Secções</p>
       ${item('data-goto="agenda"', "🕘", "Agenda")}
       ${item('data-goto="resumo"', "✨", "Resumo")}
-      ${item('data-goto="emails"', "✉️", "Emails", n(b?.emails))}
-      ${item('data-goto="responder"', "↩️", "A responder", n(b?.toReply))}
+      ${item('data-goto="emails"', "✉️", "Emails", n(b ? [...b.emails.map((m) => threadOf(m.link)), ...(b.toReply ?? []).map((r) => r.id)].filter((v, i, a) => !v || a.indexOf(v) === i) : undefined))}
       ${item('data-goto="tarefas"', "✅", "Tarefas", n(allTasks()))}
       ${
         isDemo
@@ -510,16 +507,15 @@ function renderMain() {
     const c = {
       agenda: agenda(dia, titulo),
       resumo: b ? summaryCard(b) : "",
-      emails: b ? emailsCard(b.emails) : "",
-      responder: b ? replyCard(b.toReply) : "",
+      emails: b ? emailsCard(b.emails, b.toReply) : "",
       tarefas: tasksCard(allTasks()),
     };
     const ordem: Record<Faixa, (keyof typeof c)[]> = {
-      manha: ["agenda", "resumo", "emails", "responder", "tarefas"],
-      tarde: ["agenda", "tarefas", "emails", "responder", "resumo"],
-      fecho: ["agenda", "responder", "tarefas", "emails", "resumo"],
-      "fim-de-semana": ["agenda", "tarefas", "resumo", "responder", "emails"],
-      vespera: ["agenda", "tarefas", "responder", "resumo", "emails"],
+      manha: ["agenda", "tarefas", "emails", "resumo"],
+      tarde: ["agenda", "tarefas", "emails", "resumo"],
+      fecho: ["agenda", "tarefas", "emails", "resumo"],
+      "fim-de-semana": ["agenda", "tarefas", "resumo", "emails"],
+      vespera: ["agenda", "tarefas", "resumo", "emails"],
     };
     body = `
       ${dutyBanner()}
