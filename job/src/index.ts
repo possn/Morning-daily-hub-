@@ -5,7 +5,7 @@ import { fetchCalendarEvents, fetchEmails, fetchToReply, type RawEmail } from ".
 import { fetchNotionTasks } from "./sources/notion.js";
 import { fetchObsidianTasks } from "./sources/obsidian.js";
 import { buildWithAI } from "./ai.js";
-import { saveBrief } from "./store.js";
+import { fetchAppTasks, saveBrief } from "./store.js";
 import { fetchWeather } from "./sources/weather.js";
 import { maybeSendWeekly } from "./weekly.js";
 import type { Brief, CalEvent, ReplyItem, TaskItem, Weather } from "./types.js";
@@ -27,15 +27,16 @@ async function main() {
   const today = localDate();
   const sources: Brief["sources"] = {};
 
-  const [events, emails, toReply, notion, obsidian, weather] = await Promise.all([
+  const [events, emails, toReply, notion, obsidian, weather, appTasks] = await Promise.all([
     attempt<CalEvent[]>("calendario", [], () => fetchCalendarEvents(today), sources),
     attempt<RawEmail[]>("gmail", [], fetchEmails, sources),
     attempt<ReplyItem[]>("responder", [], () => fetchToReply(), sources),
     config.notion.token ? attempt<TaskItem[]>("notion", [], fetchNotionTasks, sources) : ((sources.notion = "desligado"), []),
     config.obsidian.vaultPath ? attempt<TaskItem[]>("obsidian", [], fetchObsidianTasks, sources) : ((sources.obsidian = "desligado"), []),
     attempt<Weather | undefined>("tempo", undefined, fetchWeather, sources),
+    attempt<TaskItem[]>("tarefas", [], fetchAppTasks, sources),
   ]);
-  const tasks = [...notion, ...obsidian];
+  const tasks = [...appTasks, ...notion, ...obsidian];
 
   const todays = events.filter((e) => e.start.slice(0, 10) === today);
   const dutyEvent = todays.find((e) => e.source === "escala");
