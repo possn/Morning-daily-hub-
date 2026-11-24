@@ -1,6 +1,6 @@
 // Recebe os eventos dos calendários do iPhone (Outlook do hospital + Família do iCloud) enviados pelo Atalho do iOS,
 // e manda a notificação da manhã para a PWA (Web Push).
-// Autenticação: cabeçalho "Authorization: Bearer <token>". O token está na tabela app_config (chave ingest_token).
+// Autenticação: "Authorization: Bearer <token>" ou ?t=<token>. O token está em app_config (ingest_token); a app copia a ligação pronta.
 // Deploy: supabase functions deploy ingest-outlook --no-verify-jwt
 //
 // Corpo aceite (JSON): { "events": [ { "title", "start", "end", "allDay"?, "location"?, "calendar"? } ], "from"?: ISO, "to"?: ISO, "notify"?: boolean | "force" }
@@ -108,7 +108,8 @@ Deno.serve(async (req) => {
   const cfg = await config();
   const token = Deno.env.get("INGEST_TOKEN") || cfg.ingest_token || "";
   const OWNER = Deno.env.get("OWNER_USER_ID") || cfg.owner_user_id || "";
-  const auth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+  // O token pode vir no cabeçalho Authorization ou na ligação (?t=), que a app copia já pronta.
+  const auth = (req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() || new URL(req.url).searchParams.get("t") || "").trim();
   if (!token || !OWNER || !safeEqual(auth, token)) return new Response("Unauthorized", { status: 401 });
 
   let body: { events?: In[] | string; from?: string; to?: string; notify?: boolean | string };
