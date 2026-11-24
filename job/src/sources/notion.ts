@@ -6,9 +6,31 @@ import type { TaskItem } from "../types.js";
 
 type Prop = { type: string; [k: string]: any };
 
+const headers = (token: string) => ({
+  authorization: `Bearer ${token}`,
+  "notion-version": "2022-06-28",
+  "content-type": "application/json",
+});
+
+// Sem NOTION_TASK_DATABASE_IDS: usa as bases de dados partilhadas com a integração
+// que pareçam de tarefas (nome com tarefa/task/to-do) ou, se não houver, todas.
+async function discoverDatabases(token: string): Promise<string[]> {
+  const res = await fetch("https://api.notion.com/v1/search", {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify({ filter: { property: "object", value: "database" }, page_size: 50 }),
+  });
+  if (!res.ok) throw new Error(`Notion HTTP ${res.status}`);
+  const data = (await res.json()) as { results: any[] };
+  const all = data.results.map((d) => ({ id: d.id as string, name: (d.title ?? []).map((t: any) => t.plain_text).join("") }));
+  const tasks = all.filter((d) => /tarefa|task|to-?do|afazer/i.test(d.name));
+  return (tasks.length ? tasks : all).map((d) => d.id);
+}
+
 export async function fetchNotionTasks(): Promise<TaskItem[]> {
-  const { token, databaseIds, doneValues } = config.notion;
-  if (!token || databaseIds.length === 0) return [];
+  const { token, doneValues } = config.notion;
+  if (!token) return [];
+  const databaseIds = config.notion.databaseIds.length ? config.notion.databaseIds : await discoverDatabases(token);
   const out: TaskItem[] = [];
 
   for (const db of databaseIds) {
@@ -16,11 +38,7 @@ export async function fetchNotionTasks(): Promise<TaskItem[]> {
     do {
       const res = await fetch(`https://api.notion.com/v1/databases/${db}/query`, {
         method: "POST",
-        headers: {
-          authorization: `Bearer ${token}`,
-          "notion-version": "2022-06-28",
-          "content-type": "application/json",
-        },
+        headers: headers(token),
         body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
       });
       if (!res.ok) throw new Error(`Notion HTTP ${res.status}`);

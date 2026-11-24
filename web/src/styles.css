@@ -321,3 +321,21 @@ body.menu-open { overflow: hidden; }
   .wrap { --gut: max(32px, calc((100vw - 248px - 680px) / 2)); margin-left: 248px; margin-right: 0; max-width: none; padding-left: var(--gut); padding-right: var(--gut); }
   .hero { margin-left: calc(-1 * var(--gut)); margin-right: calc(-1 * var(--gut)); }
 }
+
+/* Tempo, trajeto, rascunhos e ações nas tarefas */
+.hero .weather { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+.hero.noite .weather { color: #c9c3d8; }
+.duty .route { display: inline-block; margin-top: 6px; font-size: 15px; font-weight: 600; }
+.act { margin: -4px 16px 10px 16px; font-size: 14px; }
+.act .link, .act a { font-weight: 600; }
+.act.ok { color: var(--google); }
+.task-li { display: flex; align-items: center; }
+.task-li > .row { flex: 1; min-width: 0; }
+.task-acts { display: flex; gap: 6px; padding-right: 16px; }
+.tbtn {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--fill); font-size: 16px; font-weight: 700; color: var(--text);
+}
+.tbtn:active { background: var(--accent-soft); color: var(--accent); }
+.list li.task-li + li .row, .list li + li.task-li .row { border-top: 0; }
+.list li + li.task-li { border-top: 0.5px solid var(--sep); }

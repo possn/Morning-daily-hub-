@@ -1,6 +1,6 @@
 import "./styles.css";
-import type { Brief, CalEvent, EmailItem, ReplyItem, TaskItem } from "./types";
-import { clearCache, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
+import type { Brief, CalEvent, EmailItem, ReplyItem, TaskItem, Weather } from "./types";
+import { callFn, clearCache, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
@@ -129,9 +129,24 @@ function header(brief: Brief | null): string {
       </svg>
       <p class="eyebrow">${esc(cap(now.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })))}</p>
       <h1>${greet}, Pedro</h1>
+      ${weatherLine(brief?.weather)}
       ${brief?.headline ? `<p class="headline">${esc(brief.headline)}</p>` : ""}
     </header>`;
 }
+
+// Tempo de hoje (ou de amanhã, ao fim do dia).
+function weatherLine(w?: Weather): string {
+  if (!w?.days?.length) return "";
+  const today = ymd(new Date());
+  const late = new Date().getHours() >= 19;
+  const d = w.days.find((x) => x.date === (late ? addDays(today, 1) : today));
+  if (!d) return "";
+  return `<p class="weather">${late ? "Amanhã · " : ""}${d.emoji} ${d.tmax}° / ${d.tmin}°${d.rain >= 30 ? ` · chuva ${d.rain}%` : ""} · ${esc(w.place)}</p>`;
+}
+
+// Abre o Google Maps com o trajeto para o hospital (trânsito em tempo real, sem chaves nem morada guardada).
+const HOSPITAL_ROUTE =
+  "https://www.google.com/maps/dir/?api=1&destination=Hospital+Prof.+Doutor+Fernando+Fonseca,+Amadora&travelmode=driving";
 
 function segmented(): string {
   return `
@@ -157,6 +172,7 @@ function dutyBanner(): string {
         <p class="duty-when">${when} · Escala</p>
         <p class="duty-title">${esc(e.title)}</p>
         <p class="muted">${e.allDay ? "Dia inteiro" : `${time(e.start)} – ${time(e.end)}`}</p>
+        ${now ? `<a class="link route" href="${HOSPITAL_ROUTE}" target="_blank" rel="noopener">🚗 Trânsito para o hospital</a>` : ""}
       </div>
     </section>`;
 }
@@ -276,10 +292,25 @@ function replyCard(items: ReplyItem[] | undefined): string {
             </span>
             <span class="chev" aria-hidden="true">›</span>
           </a>
+          ${draftRow(m.id)}
         </li>`,
         )
         .join("")}</ul>
     </section>`;
+}
+
+// Estado dos rascunhos e ações nas tarefas (por id), só nesta sessão.
+const draftState: Record<string, { busy?: boolean; msg?: string; link?: string; err?: boolean }> = {};
+const taskBusy = new Set<string>();
+let taskMsg = "";
+
+function draftRow(threadId: string): string {
+  const st = draftState[threadId];
+  if (st?.link) return `<p class="act ok">✓ Rascunho guardado. <a class="link" href="${esc(st.link)}" target="_blank" rel="noopener">Abrir no Gmail</a></p>`;
+  if (st?.busy) return `<p class="act muted">A escrever o rascunho…</p>`;
+  return `<p class="act"><button class="link" data-draft="${esc(threadId)}">✍️ Preparar rascunho de resposta</button>${
+    st?.msg ? ` <span class="${st.err ? "err" : "muted"}">${esc(st.msg)}</span>` : ""
+  }</p>`;
 }
 
 // ---------- faixas do dia ----------
@@ -331,12 +362,21 @@ function tasksCard(tasks: TaskItem[]): string {
                       due ? ` · <b class="${overdue ? "late" : ""}">${esc(due)}</b>` : ""
                     }</span>
                   </span>`;
-                return `<li>${
+                const acts =
+                  t.source === "notion"
+                    ? `<span class="task-acts">${
+                        taskBusy.has(t.id)
+                          ? `<span class="muted">…</span>`
+                          : `<button class="tbtn" data-task="${esc(t.id)}" data-op="done" aria-label="Marcar como feita">✓</button><button class="tbtn" data-task="${esc(t.id)}" data-op="tomorrow" aria-label="Passar para amanhã">→</button>`
+                      }</span>`
+                    : "";
+                return `<li class="task-li">${
                   t.link ? `<a class="row" href="${esc(safeHref(t.link))}" target="_blank" rel="noopener">${inner}</a>` : `<div class="row">${inner}</div>`
-                }</li>`;
+                }${acts}</li>`;
               })
               .join("")}</ul>`
       }
+      ${taskMsg ? `<p class="act err">${esc(taskMsg)}</p>` : ""}
     </section>`;
 }
 
@@ -599,8 +639,34 @@ function renderLogin(msg = "") {
 // ---------- eventos ----------
 
 app.addEventListener("click", async (ev) => {
-  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto]");
+  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto],[data-draft],[data-task]");
   if (!t) return;
+  if (t.dataset.draft) {
+    const id = t.dataset.draft;
+    draftState[id] = { busy: true };
+    renderMain();
+    const r = await callFn("draft-reply", { threadId: id });
+    draftState[id] = r.ok ? { link: r.link } : { msg: r.error ?? "Não consegui.", err: true };
+    renderMain();
+    return;
+  }
+  if (t.dataset.task) {
+    ev.preventDefault();
+    const id = t.dataset.task;
+    const op = t.dataset.op as "done" | "tomorrow";
+    taskBusy.add(id);
+    taskMsg = "";
+    renderMain();
+    const r = await callFn("task-action", { id, action: op });
+    taskBusy.delete(id);
+    const brief = state.snap?.brief;
+    if (r.ok && brief) {
+      const tomorrow = addDays(ymd(new Date()), 1);
+      brief.tasks = op === "done" ? brief.tasks.filter((x) => x.id !== id) : brief.tasks.map((x) => (x.id === id ? { ...x, due: tomorrow } : x));
+    } else if (!r.ok) taskMsg = r.error ?? "Não consegui atualizar a tarefa.";
+    renderMain();
+    return;
+  }
   const fromMenu = !!t.closest(".side");
   if (fromMenu) state.menu = false;
   if (t.dataset.action === "menu") {

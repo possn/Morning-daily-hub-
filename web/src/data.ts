@@ -145,3 +145,20 @@ export async function shortcutUrl(): Promise<string | null> {
   const { data, error } = await sb.rpc("shortcut_url");
   return error || typeof data !== "string" ? null : data;
 }
+
+// ---------- ações (Notion, Gmail) através das funções do Supabase ----------
+export async function callFn(name: "task-action" | "draft-reply", body: Record<string, string>): Promise<{ ok?: boolean; link?: string; error?: string }> {
+  if (isDemo || !sb) return { ok: true, link: "https://mail.google.com/mail/u/0/#drafts" };
+  const { data, error } = await sb.functions.invoke(name, { body });
+  if (error) {
+    // A mensagem útil vem no corpo da resposta.
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const j = ctx ? await ctx.json() : null;
+      return { error: j?.error ?? error.message };
+    } catch {
+      return { error: error.message };
+    }
+  }
+  return data as { ok?: boolean; link?: string; error?: string };
+}
