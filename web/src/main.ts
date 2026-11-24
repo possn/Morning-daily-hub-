@@ -1,6 +1,6 @@
 import "./styles.css";
 import type { Brief, CalEvent, EmailItem, ReplyItem, TaskItem, Weather } from "./types";
-import { callFn, clearCache, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
+import { addTask, callFn, clearCache, updateTask, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
 
 const app = document.getElementById("app")!;
@@ -336,11 +336,27 @@ const FAIXA_TEXTO: Record<Faixa, string> = {
   vespera: "Domingo à noite: a preparação da semana.",
 };
 
+// As tuas tarefas (guardadas na app) primeiro, por prazo; depois as do Notion/Obsidian vindas do brief.
+function allTasks(): TaskItem[] {
+  const own = [...(state.snap?.tasks ?? [])].sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
+  const other = (state.snap?.brief?.tasks ?? []).filter((t) => t.source !== "app");
+  return [...own, ...other];
+}
+
 function tasksCard(tasks: TaskItem[]): string {
   const today = ymd(new Date());
   return `
     <section class="card">
       <h2>Tarefas <span class="count">${tasks.length}</span></h2>
+      <form class="task-add" data-form="task" autocomplete="off">
+        <input name="title" type="text" maxlength="300" placeholder="Nova tarefa…" aria-label="Nova tarefa" enterkeyhint="done" />
+        <select name="when" aria-label="Quando">
+          <option value="">Sem data</option>
+          <option value="hoje">Hoje</option>
+          <option value="amanha">Amanhã</option>
+        </select>
+        <button class="tbtn add" type="submit" aria-label="Adicionar">+</button>
+      </form>
       ${
         tasks.length === 0
           ? `<p class="empty">Tudo em dia.</p>`
@@ -358,12 +374,14 @@ function tasksCard(tasks: TaskItem[]): string {
                   <span class="check ${t.priority}" aria-hidden="true"></span>
                   <span class="row-body">
                     <span class="row-title">${esc(t.title)}</span>
-                    <span class="row-sub">${t.source === "notion" ? "Notion" : "Obsidian"}${t.context ? ` · ${esc(t.context)}` : ""}${
-                      due ? ` · <b class="${overdue ? "late" : ""}">${esc(due)}</b>` : ""
-                    }</span>
+                    <span class="row-sub">${[
+                      t.source === "notion" ? "Notion" : t.source === "obsidian" ? "Obsidian" : "",
+                      t.context ? esc(t.context) : "",
+                      due ? `<b class="${overdue ? "late" : ""}">${esc(due)}</b>` : "",
+                    ].filter(Boolean).join(" · ")}</span>
                   </span>`;
                 const acts =
-                  t.source === "notion"
+                  t.source === "notion" || t.source === "app"
                     ? `<span class="task-acts">${
                         taskBusy.has(t.id)
                           ? `<span class="muted">…</span>`
@@ -464,7 +482,7 @@ function sideMenu(): string {
       ${item('data-goto="resumo"', "✨", "Resumo")}
       ${item('data-goto="emails"', "✉️", "Emails", n(b?.emails))}
       ${item('data-goto="responder"', "↩️", "A responder", n(b?.toReply))}
-      ${item('data-goto="tarefas"', "✅", "Tarefas", n(b?.tasks))}
+      ${item('data-goto="tarefas"', "✅", "Tarefas", n(allTasks()))}
       ${
         isDemo
           ? ""
@@ -494,7 +512,7 @@ function renderMain() {
       resumo: b ? summaryCard(b) : "",
       emails: b ? emailsCard(b.emails) : "",
       responder: b ? replyCard(b.toReply) : "",
-      tarefas: b ? tasksCard(b.tasks) : "",
+      tarefas: tasksCard(allTasks()),
     };
     const ordem: Record<Faixa, (keyof typeof c)[]> = {
       manha: ["agenda", "resumo", "emails", "responder", "tarefas"],
@@ -657,13 +675,20 @@ app.addEventListener("click", async (ev) => {
     taskBusy.add(id);
     taskMsg = "";
     renderMain();
-    const r = await callFn("task-action", { id, action: op });
+    const tomorrow = addDays(ymd(new Date()), 1);
+    const apply = (list: TaskItem[]) =>
+      op === "done" ? list.filter((x) => x.id !== id) : list.map((x) => (x.id === id ? { ...x, due: tomorrow } : x));
+    if (id.startsWith("a:")) {
+      const err = await updateTask(id, op, tomorrow);
+      if (err) taskMsg = err;
+      else if (state.snap) state.snap.tasks = apply(state.snap.tasks ?? []);
+    } else {
+      const r = await callFn("task-action", { id, action: op });
+      const brief = state.snap?.brief;
+      if (r.ok && brief) brief.tasks = apply(brief.tasks);
+      else if (!r.ok) taskMsg = r.error ?? "Não consegui atualizar a tarefa.";
+    }
     taskBusy.delete(id);
-    const brief = state.snap?.brief;
-    if (r.ok && brief) {
-      const tomorrow = addDays(ymd(new Date()), 1);
-      brief.tasks = op === "done" ? brief.tasks.filter((x) => x.id !== id) : brief.tasks.map((x) => (x.id === id ? { ...x, due: tomorrow } : x));
-    } else if (!r.ok) taskMsg = r.error ?? "Não consegui atualizar a tarefa.";
     renderMain();
     return;
   }
@@ -737,6 +762,25 @@ async function boot() {
   await refresh();
   void syncPush();
 }
+
+// Nova tarefa (Enter ou +).
+app.addEventListener("submit", async (ev) => {
+  const form = (ev.target as HTMLElement).closest<HTMLFormElement>('form[data-form="task"]');
+  if (!form) return;
+  ev.preventDefault();
+  const fd = new FormData(form);
+  const when = String(fd.get("when") ?? "");
+  const today = ymd(new Date());
+  const due = when === "hoje" ? today : when === "amanha" ? addDays(today, 1) : undefined;
+  const r = await addTask(String(fd.get("title") ?? ""), due);
+  if (typeof r === "string") taskMsg = r;
+  else {
+    taskMsg = "";
+    if (state.snap) state.snap.tasks = [...(state.snap.tasks ?? []), r];
+  }
+  renderMain();
+  document.querySelector<HTMLInputElement>('form[data-form="task"] input[name="title"]')?.focus();
+});
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && state.menu) {

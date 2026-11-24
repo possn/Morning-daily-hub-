@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Brief, CalEvent } from "./types";
+import type { Brief, CalEvent, TaskItem } from "./types";
 import { demoBrief, demoOutlook } from "./demo";
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -16,6 +16,7 @@ const CACHE_KEY = "dh:cache:v1";
 export interface Snapshot {
   brief: Brief | null;
   outlook: CalEvent[];
+  tasks?: TaskItem[]; // tarefas guardadas na própria app (por fazer)
   fetchedAt: string;
 }
 
@@ -106,11 +107,11 @@ export async function syncPush(): Promise<string | null> {
 
 export async function fetchSnapshot(): Promise<Snapshot> {
   if (isDemo || !sb) {
-    return { brief: demoBrief(), outlook: demoOutlook(), fetchedAt: new Date().toISOString() };
+    return { brief: demoBrief(), outlook: demoOutlook(), tasks: [...demoTasks], fetchedAt: new Date().toISOString() };
   }
   const since = new Date();
   since.setHours(0, 0, 0, 0);
-  const [b, o] = await Promise.all([
+  const [b, o, t] = await Promise.all([
     sb.from("briefs").select("payload").order("brief_date", { ascending: false }).limit(1).maybeSingle(),
     sb
       .from("outlook_events")
@@ -118,6 +119,7 @@ export async function fetchSnapshot(): Promise<Snapshot> {
       .gte("end_at", since.toISOString())
       .order("start_at")
       .limit(500),
+    sb.from("tasks").select("id,title,due,priority").is("done_at", null).order("due", { ascending: true, nullsFirst: false }).limit(200),
   ]);
   if (b.error) throw b.error;
   if (o.error) throw o.error;
@@ -133,6 +135,8 @@ export async function fetchSnapshot(): Promise<Snapshot> {
       location: r.location ?? undefined,
       calendar: r.calendar ?? undefined,
     })),
+    // Se a tabela ainda não existir, a app continua a funcionar sem tarefas próprias.
+    tasks: t.error ? [] : (t.data ?? []).map(rowToTask),
     fetchedAt: new Date().toISOString(),
   };
   writeCache(snap);
@@ -161,4 +165,28 @@ export async function callFn(name: "task-action" | "draft-reply", body: Record<s
     }
   }
   return data as { ok?: boolean; link?: string; error?: string };
+}
+
+// ---------- tarefas da própria app ----------
+type TaskRow = { id: string; title: string; due: string | null; priority: TaskItem["priority"] };
+const rowToTask = (r: TaskRow): TaskItem => ({ id: `a:${r.id}`, source: "app", title: r.title, due: r.due ?? undefined, priority: r.priority });
+const demoTasks: TaskItem[] = [];
+
+export async function addTask(title: string, due?: string): Promise<TaskItem | string> {
+  const clean = title.trim().slice(0, 300);
+  if (!clean) return "Escreve a tarefa.";
+  if (isDemo || !sb) {
+    return { id: `a:demo-${Date.now()}`, source: "app", title: clean, due, priority: "media" };
+  }
+  const { data, error } = await sb.from("tasks").insert({ title: clean, due: due ?? null }).select("id,title,due,priority").single();
+  if (error) return "Não consegui guardar a tarefa.";
+  return rowToTask(data as TaskRow);
+}
+
+export async function updateTask(id: string, op: "done" | "tomorrow", tomorrow: string): Promise<string | null> {
+  const raw = id.slice(2);
+  if (isDemo || !sb) return null;
+  const patch = op === "done" ? { done_at: new Date().toISOString() } : { due: tomorrow };
+  const { error } = await sb.from("tasks").update(patch).eq("id", raw);
+  return error ? "Não consegui atualizar a tarefa." : null;
 }

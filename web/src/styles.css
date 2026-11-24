@@ -339,3 +339,13 @@ body.menu-open { overflow: hidden; }
 .tbtn:active { background: var(--accent-soft); color: var(--accent); }
 .list li.task-li + li .row, .list li + li.task-li .row { border-top: 0; }
 .list li + li.task-li { border-top: 0.5px solid var(--sep); }
+.task-add { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
+.task-add input {
+  flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text);
+  background: var(--fill); border: 0; border-radius: 10px; padding: 9px 12px; outline-color: var(--accent);
+}
+.task-add select {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--fill);
+  border: 0; border-radius: 10px; padding: 9px 8px; -webkit-appearance: none; appearance: none;
+}
+.tbtn.add { background: var(--accent); color: #fff; font-size: 20px; flex: none; }

@@ -35,7 +35,7 @@ export interface ReplyItem {
 
 export interface TaskItem {
   id: string;
-  source: "notion" | "obsidian";
+  source: "app" | "notion" | "obsidian";
   title: string;
   due?: string; // YYYY-MM-DD
   priority: "alta" | "media" | "baixa";
