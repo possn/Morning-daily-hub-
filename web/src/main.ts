@@ -14,10 +14,12 @@ const state: {
   snap: Snapshot | null;
   loading: boolean;
   error: string | null;
+  menu: boolean; // menu lateral aberto (no telemóvel)
 } = {
   view: (localStorageGet("dh:view") as View) || "hoje",
   selected: ymd(new Date()),
   month: ymd(new Date()).slice(0, 7),
+  menu: false,
   snap: readCache(),
   loading: false,
   error: null,
@@ -82,16 +84,25 @@ function header(brief: Brief | null): string {
   const h = now.getHours();
   const greet = h < 6 ? "Boa noite" : h < 13 ? "Bom dia" : h < 20 ? "Boa tarde" : "Boa noite";
 
-  // Posição do sol no arco: 0 = nascer, 1 = pôr. De noite fica pousado no horizonte.
-  const span = set.getTime() - rise.getTime();
-  const raw = (now.getTime() - rise.getTime()) / span;
-  const t = Math.min(1, Math.max(0, raw));
+  // Dia: o sol percorre o arco do nascer (esquerda) ao pôr (direita).
+  // Noite: a lua faz o mesmo caminho, do pôr do sol até ao nascer seguinte.
   const R = 132, CX = 160, CY = 150;
+  const night = phase === "noite";
+  const DAY = 864e5;
+  let from = rise, to = set;
+  if (night) {
+    if (now < rise) {
+      from = sunTimes(new Date(now.getTime() - DAY)).set; // pôr do sol de ontem
+      to = rise;
+    } else {
+      from = set;
+      to = sunTimes(new Date(now.getTime() + DAY)).rise; // nascer de amanhã
+    }
+  }
+  const t = Math.min(1, Math.max(0, (now.getTime() - from.getTime()) / (to.getTime() - from.getTime())));
   const ang = Math.PI * (1 - t);
   const sx = CX + R * Math.cos(ang);
   const sy = CY - R * Math.sin(ang);
-  const night = phase === "noite";
-  const nightX = raw < 0 ? CX - R : CX + R;
   const dash = Math.PI * R; // comprimento do arco
   const hhmm = (d: Date) => d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
 
@@ -100,18 +111,20 @@ function header(brief: Brief | null): string {
       <svg class="sky" viewBox="0 0 320 172" aria-hidden="true">
         <defs>
           <radialGradient id="glow"><stop offset="0" stop-color="var(--sun)" stop-opacity=".55"/><stop offset="1" stop-color="var(--sun)" stop-opacity="0"/></radialGradient>
+          <radialGradient id="luar"><stop offset="0" stop-color="#f4efe6" stop-opacity=".22"/><stop offset="1" stop-color="#f4efe6" stop-opacity="0"/></radialGradient>
         </defs>
         <path class="track" d="M${CX - R} ${CY} A${R} ${R} 0 0 1 ${CX + R} ${CY}" />
         <path class="trail" d="M${CX - R} ${CY} A${R} ${R} 0 0 1 ${CX + R} ${CY}"
-          stroke-dasharray="${dash}" stroke-dashoffset="${dash * (1 - (night && raw > 1 ? 1 : t))}" />
+          stroke-dasharray="${dash}" stroke-dashoffset="${dash * (1 - t)}" />
         <line class="horizon" x1="8" y1="${CY}" x2="312" y2="${CY}" />
         ${
           night
-            ? `<circle class="moon" cx="${nightX}" cy="${CY - 26}" r="11" /><circle class="moon-cut" cx="${nightX + 6}" cy="${CY - 30}" r="10" />`
+            ? `<mask id="crescente"><rect x="0" y="0" width="320" height="172" fill="#fff"/><circle cx="${sx + 6}" cy="${sy - 4}" r="10" fill="#000"/></mask>
+               <circle cx="${sx}" cy="${sy}" r="30" fill="url(#luar)" /><circle class="moon" cx="${sx}" cy="${sy}" r="11" mask="url(#crescente)" />`
             : `<circle cx="${sx}" cy="${sy}" r="34" fill="url(#glow)" /><circle class="sun" cx="${sx}" cy="${sy}" r="13" />`
         }
-        <text class="edge" x="${CX - R}" y="${CY + 18}" text-anchor="middle">${hhmm(rise)}</text>
-        <text class="edge" x="${CX + R}" y="${CY + 18}" text-anchor="middle">${hhmm(set)}</text>
+        <text class="edge" x="${CX - R}" y="${CY + 18}" text-anchor="middle">${hhmm(from)}</text>
+        <text class="edge" x="${CX + R}" y="${CY + 18}" text-anchor="middle">${hhmm(to)}</text>
         <text class="clock" x="${CX}" y="${CY - 22}" text-anchor="middle" aria-label="Hora atual">${hhmm(now)}</text>
       </svg>
       <p class="eyebrow">${esc(cap(now.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })))}</p>
@@ -394,6 +407,35 @@ function footer(): string {
     </footer>`;
 }
 
+// Menu lateral: gaveta no telemóvel (☰), coluna fixa no computador.
+function sideMenu(): string {
+  const b = state.snap?.brief;
+  const n = (x?: unknown[]) => (x?.length ? `<span class="count">${x.length}</span>` : "");
+  const item = (attrs: string, icon: string, label: string, extra = "", on = false) =>
+    `<button class="side-item${on ? " on" : ""}" ${attrs}><span class="side-ico" aria-hidden="true">${icon}</span><span>${label}</span>${extra}</button>`;
+  return `
+    <div class="scrim" data-action="menu-fechar" ${state.menu ? "" : "hidden"}></div>
+    <nav class="side${state.menu ? " open" : ""}" aria-label="Menu">
+      <p class="side-brand">Daily Hub</p>
+      ${item('data-view="hoje"', "☀️", "Hoje", "", state.view === "hoje")}
+      ${item('data-view="calendario"', "🗓️", "Calendário", "", state.view === "calendario")}
+      <p class="side-sec">Secções</p>
+      ${item('data-goto="agenda"', "🕘", "Agenda")}
+      ${item('data-goto="resumo"', "✨", "Resumo")}
+      ${item('data-goto="emails"', "✉️", "Emails", n(b?.emails))}
+      ${item('data-goto="responder"', "↩️", "A responder", n(b?.toReply))}
+      ${item('data-goto="tarefas"', "✅", "Tarefas", n(b?.tasks))}
+      ${
+        isDemo
+          ? ""
+          : `<p class="side-sec">Definições</p>
+      ${pushState() === "ligadas" || pushState() === "indisponivel" ? "" : item('data-action="notif"', "🔔", "Ativar notificação")}
+      ${item('data-action="atalho"', "📋", "Copiar ligação do Atalho")}
+      ${item('data-action="logout"', "↪︎", "Terminar sessão")}`
+      }
+    </nav>`;
+}
+
 // ---------- ecrãs ----------
 
 function renderMain() {
@@ -426,11 +468,16 @@ function renderMain() {
       ${stale ? `<p class="stale">A mostrar o brief de ${esc(b!.date)}. O de hoje ainda não foi gerado.</p>` : ""}
       ${weekStrip()}
       <p class="faixa">${FAIXA_TEXTO[faixa]}</p>
-      ${ordem[faixa].map((k) => c[k]).join("")}`;
+      ${ordem[faixa].map((k) => (c[k] ? `<div class="sec" id="sec-${k}">${c[k]}</div>` : "")).join("")}`;
   } else {
-    body = `${monthGrid()}${agenda(state.selected)}`;
+    body = `${monthGrid()}<div class="sec" id="sec-agenda">${agenda(state.selected)}</div>`;
   }
+  document.body.classList.toggle("menu-open", state.menu);
   app.innerHTML = `
+    ${sideMenu()}
+    <button class="menu-btn" data-action="menu" aria-label="Abrir menu" aria-expanded="${state.menu}">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
     <main class="wrap ${state.loading ? "loading" : ""}">
       ${header(b)}
       ${segmented()}
@@ -552,9 +599,24 @@ function renderLogin(msg = "") {
 // ---------- eventos ----------
 
 app.addEventListener("click", async (ev) => {
-  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action]");
+  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto]");
   if (!t) return;
-  if (t.dataset.view) {
+  const fromMenu = !!t.closest(".side");
+  if (fromMenu) state.menu = false;
+  if (t.dataset.action === "menu") {
+    state.menu = !state.menu;
+  } else if (t.dataset.action === "menu-fechar") {
+    state.menu = false;
+  } else if (t.dataset.goto) {
+    // Secções vivem no separador Hoje (a agenda também existe no Calendário).
+    const k = t.dataset.goto;
+    if (!(k === "agenda" && state.view === "calendario")) state.view = "hoje";
+    renderMain();
+    const el = document.getElementById(`sec-${k}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    else window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  } else if (t.dataset.view) {
     state.view = t.dataset.view as View;
     localStorageSet("dh:view", state.view);
   } else if (t.dataset.day) {
@@ -609,6 +671,13 @@ async function boot() {
   await refresh();
   void syncPush();
 }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.menu) {
+    state.menu = false;
+    renderMain();
+  }
+});
 
 // Ao voltar à app (iOS mantém PWAs suspensas), atualiza se passaram >5 min.
 document.addEventListener("visibilitychange", () => {
