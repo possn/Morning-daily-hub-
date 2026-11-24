@@ -123,9 +123,17 @@ Deno.serve(async (req) => {
   if (Array.isArray(body.events)) raw = body.events;
   else if (typeof body.events === "string") raw = parseLoose(body.events);
 
+  // Calendários a ignorar: os de permutas (partilhados) e os nomes em app_config.ignore_calendars (separados por vírgula).
+  const ignore = (cfg.ignore_calendars ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const skipCal = (c?: string) => {
+    const n = String(c ?? "").trim().toLowerCase();
+    return /permut/.test(n) || ignore.includes(n);
+  };
+
   const rows = [];
   const seen = new Set<string>();
   for (const e of raw.slice(0, 800)) {
+    if (skipCal(e.calendar)) continue;
     const start = toIso(e.start);
     const end = toIso(e.end) ?? start;
     // Ignora marcadores sem texto ("*") e duplicados entre calendários (ex.: feriados em dois calendários).
