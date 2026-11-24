@@ -187,6 +187,8 @@ function isDuty(title?: string): boolean {
 // Com estrela, ou conversas na caixa de entrada em que a última mensagem não é tua há mais de 2 dias.
 // Sem IA: só metadados (remetente, assunto, datas). O corpo nunca é descarregado.
 
+const COMMERCIAL =
+  /\btemu\b|\bfever\b|encomenda|\border\b|pedido n|confirma[cç][aã]o d[ae] (?:compra|reserva|encomenda|pagamento)|fatura|factura|recibo|bilhete|inscri[cç][aã]o confirmada|newsletter|promo|desconto|trail\b/i;
 const AUTOMATIC = /no-?reply|notifica|newsletter|mailer-daemon|donotreply|naoresponder|nao-responder/i;
 const cleanFrom = (f: string) => f.replace(/<[^>]+>/, "").replace(/"/g, "").trim() || f;
 
@@ -199,7 +201,7 @@ export async function fetchToReply(now = new Date()): Promise<ReplyItem[]> {
   const T = "https://gmail.googleapis.com/gmail/v1/users/me/threads";
   const q = (query: string, max: number) => `${T}?${new URLSearchParams({ q: query, maxResults: String(max) })}`;
   const [starred, waiting] = await Promise.all([
-    gget<{ threads?: { id: string }[] }>(q("is:starred -in:trash -in:spam", 15)),
+    gget<{ threads?: { id: string }[] }>(q("is:starred -in:trash -in:spam -category:promotions -category:social -category:updates -category:forums", 15)),
     gget<{ threads?: { id: string }[] }>(
       q("in:inbox older_than:2d newer_than:21d -category:promotions -category:social -category:forums -category:updates", 25),
     ),
@@ -219,7 +221,10 @@ export async function fetchToReply(now = new Date()): Promise<ReplyItem[]> {
       const isStar = starredIds.has(id) || msgs.some((m) => m.labelIds?.includes("STARRED"));
       const repliedByMe = last.labelIds?.includes("SENT") ?? false;
       const from = h("from");
-      if (!isStar && (repliedByMe || AUTOMATIC.test(from))) return null;
+      if (!isStar && repliedByMe) return null;
+      // Mensagens automáticas ou comerciais (encomendas, bilhetes, newsletters) não contam, mesmo com estrela.
+      if (AUTOMATIC.test(from) || COMMERCIAL.test(`${from} ${subject}`)) return null;
+      if (msgs.some((m) => m.labelIds?.some((l) => /^CATEGORY_(PROMOTIONS|SOCIAL|UPDATES|FORUMS)$/.test(l)))) return null;
       if (isBlockedSender(from)) return null;
       if (isSelfNoise({ subject, snippet: "", from })) return null;
       const days = Math.max(0, Math.floor((now.getTime() - Number(last.internalDate)) / 864e5));

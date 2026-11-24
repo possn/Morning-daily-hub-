@@ -349,3 +349,12 @@ body.menu-open { overflow: hidden; }
   border: 0; border-radius: 10px; padding: 9px 8px; -webkit-appearance: none; appearance: none;
 }
 .tbtn.add { background: var(--accent); color: #fff; font-size: 20px; flex: none; }
+
+.card .subhead {
+  margin: 14px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #8e8e93);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
