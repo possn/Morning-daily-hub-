@@ -49,7 +49,8 @@ export function clearCache() {
 export const DUTY_RE = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
 export function deviceSource(title: string, calendar?: string | null): CalEvent["source"] {
   if (DUTY_RE.test(title)) return "escala";
-  if (/fam[ií]l/i.test(calendar ?? "")) return "google"; // pessoal
+  // Calendários pessoais do iPhone (Família, feriados, corridas…); o resto conta como hospital.
+  if (/fam[ií]l|feriad|holiday|anivers|birthday|dorsal|runners/i.test(calendar ?? "")) return "google";
   return "outlook";
 }
 
