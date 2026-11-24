@@ -283,8 +283,8 @@ function replyCard(items: ReplyItem[] | undefined): string {
 }
 
 // ---------- faixas do dia ----------
-// A página muda com a hora: de manhã a agenda e a escala, à tarde as tarefas rápidas,
-// ao fim do dia o que ficou por responder e a preparação de amanhã, ao fim de semana a vista pessoal.
+// A agenda vem sempre primeiro; o resto muda com a hora: à tarde as tarefas rápidas,
+// ao fim do dia o que ficou por responder, ao fim de semana a vista pessoal.
 type Faixa = "manha" | "tarde" | "fecho" | "fim-de-semana" | "vespera";
 
 function faixaDoDia(d = new Date()): Faixa {
@@ -299,8 +299,8 @@ function faixaDoDia(d = new Date()): Faixa {
 
 const FAIXA_TEXTO: Record<Faixa, string> = {
   manha: "Manhã: agenda e escala primeiro.",
-  tarde: "Tarde: tarefas rápidas e emails.",
-  fecho: "Fim do dia: o que ficou por responder e o dia de amanhã.",
+  tarde: "Tarde: agenda, depois tarefas rápidas e emails.",
+  fecho: "Fim do dia: o dia de amanhã e o que ficou por responder.",
   "fim-de-semana": "Fim de semana: a tua vista pessoal.",
   vespera: "Domingo à noite: a preparação da semana.",
 };
@@ -458,8 +458,8 @@ function renderMain() {
     };
     const ordem: Record<Faixa, (keyof typeof c)[]> = {
       manha: ["agenda", "resumo", "emails", "responder", "tarefas"],
-      tarde: ["tarefas", "emails", "responder", "agenda", "resumo"],
-      fecho: ["responder", "tarefas", "agenda", "emails", "resumo"],
+      tarde: ["agenda", "tarefas", "emails", "responder", "resumo"],
+      fecho: ["agenda", "responder", "tarefas", "emails", "resumo"],
       "fim-de-semana": ["agenda", "tarefas", "resumo", "responder", "emails"],
       vespera: ["agenda", "tarefas", "responder", "resumo", "emails"],
     };
