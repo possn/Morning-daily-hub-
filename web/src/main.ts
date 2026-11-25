@@ -163,15 +163,22 @@ function dutyBanner(): string {
   const now = duty.find((e) => eventsOn(today).includes(e));
   const next = !now && duty.find((e) => e.start.slice(0, 10) === tomorrow);
   const e = now || next;
-  if (!e) return "";
+  // Bancos da Michele hoje/amanhã.
+  const mi = bancos().filter((b) => b.who === "M" && (b.date === today || b.date === tomorrow));
+  const miLine = mi.length
+    ? `<p class="duty-mi"><i class="dot mi"></i>Michele: ${mi.map((b) => `${b.date === today ? "hoje" : "amanhã"} ${KIND[b.kind]}${b.place ? ` (${esc(b.place)})` : ""}`).join(", ")}</p>`
+    : "";
+  if (!e) return miLine ? `<section class="card duty-mi-only">${miLine}</section>` : "";
   const when = now ? "Hoje" : "Amanhã";
+  const b = parseBanco(e);
   return `
     <section class="card duty ${now ? "is-now" : ""}">
       <div class="duty-icon" aria-hidden="true">✚</div>
       <div>
         <p class="duty-when">${when} · Escala</p>
         <p class="duty-title">${esc(e.title)}</p>
-        <p class="muted">${e.allDay ? "Dia inteiro" : `${time(e.start)} – ${time(e.end)}`}</p>
+        <p class="muted">${b ? `${b.kind === "24h" ? "24 horas" : `${cap(b.kind)} · 12 horas`}` : e.allDay ? "Dia inteiro" : `${time(e.start)} – ${time(e.end)}`}</p>
+        ${miLine}
       </div>
     </section>`;
 }
@@ -185,7 +192,7 @@ function weekStrip(): string {
         .map((d) => {
           const ev = eventsOn(d);
           const dt = new Date(`${d}T12:00:00`);
-          const dots = [...new Set(ev.map((e) => e.source))].map((s) => `<i class="dot ${s}"></i>`).join("");
+          const dots = [...new Set(ev.map((e) => e.source))].map((s) => `<i class="dot ${s}"></i>`).join("") + (ev.some((e) => /^\s*banco\s+M\b/i.test(e.title)) ? `<i class="dot mi"></i>` : "");
           return `
           <button role="listitem" class="day ${d === state.selected ? "sel" : ""} ${d === today ? "today" : ""}" data-day="${d}">
             <span class="dow">${esc(dt.toLocaleDateString(LOCALE, { weekday: "narrow" }))}</span>
@@ -393,6 +400,80 @@ function trafficCard(): string {
     </section>`;
 }
 
+// ---------- escala do mês (bancos do Pedro e da Michele) ----------
+// "Banco P ..." é o Pedro, "Banco M ..." a Michele. Noite e dia contam 12 h; "24h" ou sem indicação contam 24 h.
+type Banco = { date: string; who: "P" | "M"; kind: "dia" | "noite" | "24h"; hours: number; place: string; title: string };
+
+function parseBanco(e: CalEvent): Banco | null {
+  const m = e.title.match(/^\s*banco\s+([PM])\b\s*(.*)$/i);
+  if (!m) return null;
+  const rest = m[2];
+  const kind = /noite/i.test(rest) ? "noite" : /\bdia\b/i.test(rest) ? "dia" : "24h";
+  const place = rest.replace(/\b(noite|dia|24\s*h)\b/gi, "").replace(/^[\s\-–·]+|[\s\-–·]+$/g, "").trim();
+  const date = e.allDay ? e.start.slice(0, 10) : ymd(new Date(e.start));
+  return { date, who: m[1].toUpperCase() as "P" | "M", kind, hours: kind === "24h" ? 24 : 12, place, title: e.title.trim() };
+}
+
+function bancos(): Banco[] {
+  const seen = new Set<string>();
+  return allEvents()
+    .map(parseBanco)
+    .filter((b): b is Banco => !!b && !seen.has(`${b.date}|${b.who}|${b.kind}`) && !!seen.add(`${b.date}|${b.who}|${b.kind}`))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const KIND: Record<Banco["kind"], string> = { dia: "dia", noite: "noite", "24h": "24 h" };
+
+function escalaCard(): string {
+  const today = ymd(new Date());
+  const month = today.slice(0, 7);
+  const next = addDays(`${month}-28`, 7).slice(0, 7);
+  const all = bancos();
+  const block = (mm: string) => {
+    const list = all.filter((b) => b.date.startsWith(mm));
+    if (!list.length) return "";
+    const sum = (who: "P" | "M") => {
+      const l = list.filter((b) => b.who === who);
+      const h = l.reduce((t, b) => t + b.hours, 0);
+      const done = l.filter((b) => b.date < today).length;
+      return { n: l.length, h, done };
+    };
+    const p = sum("P");
+    const m = sum("M");
+    const both = new Set(list.filter((b) => b.who === "P").map((b) => b.date).filter((d) => list.some((x) => x.who === "M" && x.date === d)));
+    const nome = cap(new Date(`${mm}-15T12:00:00`).toLocaleDateString(LOCALE, { month: "long" }));
+    const stat = (label: string, cls: string, x: { n: number; h: number; done: number }) =>
+      `<div class="esc-stat ${cls}"><span class="esc-who">${label}</span><strong>${x.n}</strong> ${x.n === 1 ? "banco" : "bancos"} · ${x.h} h${
+        mm === month && x.done ? `<span class="muted"> · ${x.done} ${x.done === 1 ? "feito" : "feitos"}</span>` : ""
+      }</div>`;
+    const days = list
+      .filter((b) => mm !== month || b.date >= today)
+      .map((b) => {
+        const dt = new Date(`${b.date}T12:00:00`);
+        const wd = dt.toLocaleDateString(LOCALE, { weekday: "short" }).replace(".", "").slice(0, 3);
+        return `<li class="esc-day ${b.who === "P" ? "eu" : "mi"}${both.has(b.date) ? " both" : ""}">
+          <span class="esc-date">${esc(wd)} ${dt.getDate()}</span>
+          <span class="esc-chip">${b.who === "P" ? "Tu" : "Michele"}</span>
+          <span>${KIND[b.kind]}${b.place ? ` · ${esc(b.place)}` : ""}</span>
+          ${both.has(b.date) && b.who === "P" ? `<span class="pill alta">ambos</span>` : ""}
+        </li>`;
+      })
+      .join("");
+    return `
+      <h3 class="esc-month">${esc(nome)}</h3>
+      <div class="esc-stats">${stat("Tu", "eu", p)}${stat("Michele", "mi", m)}</div>
+      ${days ? `<ul class="esc-days">${days}</ul>` : ""}`;
+  };
+  const body = block(month) + block(next);
+  if (!body) return "";
+  return `
+    <section class="card">
+      <h2>Escala</h2>
+      ${body}
+      <p class="muted small">Noite e dia contam 12 h; «24h» ou sem indicação, 24 h. Só conta o que o Atalho já enviou.</p>
+    </section>`;
+}
+
 // ---------- faixas do dia ----------
 // A agenda vem sempre primeiro; o resto muda com a hora: à tarde as tarefas rápidas,
 // ao fim do dia o que ficou por responder, ao fim de semana a vista pessoal.
@@ -490,7 +571,7 @@ function monthGrid(): string {
     const date = `${state.month}-${String(d).padStart(2, "0")}`;
     const ev = eventsOn(date);
     const duty = ev.some((e) => e.source === "escala");
-    const dots = [...new Set(ev.map((e) => e.source))].slice(0, 3).map((s) => `<i class="dot ${s}"></i>`).join("");
+    const dots = [...new Set(ev.map((e) => e.source))].slice(0, 3).map((s) => `<i class="dot ${s}"></i>`).join("") + (ev.some((e) => /^\s*banco\s+M\b/i.test(e.title)) ? `<i class="dot mi"></i>` : "");
     cells.push(`
       <button class="mday ${date === state.selected ? "sel" : ""} ${date === today ? "today" : ""} ${duty ? "has-duty" : ""}" data-day="${date}">
         <span class="num">${d}</span><span class="dots">${dots}</span>
@@ -510,6 +591,7 @@ function monthGrid(): string {
         <span><i class="dot escala"></i>Escala</span>
         <span><i class="dot outlook"></i>Hospital</span>
         <span><i class="dot google"></i>Pessoal</span>
+        <span><i class="dot mi"></i>Banco Michele</span>
       </div>
     </section>`;
 }
@@ -562,6 +644,7 @@ function sideMenu(): string {
       ${item('data-goto="resumo"', "✨", "Resumo")}
       ${item('data-goto="emails"', "✉️", "Emails", n(b ? [...b.emails.map((m) => threadOf(m.link)), ...(b.toReply ?? []).map((r) => r.id)].filter((v, i, a) => !v || a.indexOf(v) === i) : undefined))}
       ${item('data-goto="tarefas"', "✅", "Tarefas", n(allTasks()))}
+      ${item('data-goto="escala"', "🏥", "Escala")}
       ${b?.readings?.length ? item('data-goto="leituras"', "📚", "Leituras", n(b.readings)) : ""}
       ${
         isDemo
@@ -593,13 +676,14 @@ function renderMain() {
       emails: b ? emailsCard(b.emails, b.toReply) : "",
       tarefas: tasksCard(allTasks()),
       leituras: b ? readingsCard(b.readings) : "",
+      escala: escalaCard(),
     };
     const ordem: Record<Faixa, (keyof typeof c)[]> = {
-      manha: ["agenda", "tarefas", "emails", "resumo", "leituras"],
-      tarde: ["agenda", "tarefas", "emails", "resumo", "leituras"],
-      fecho: ["agenda", "tarefas", "emails", "resumo", "leituras"],
-      "fim-de-semana": ["agenda", "tarefas", "leituras", "resumo", "emails"],
-      vespera: ["agenda", "tarefas", "leituras", "resumo", "emails"],
+      manha: ["agenda", "tarefas", "escala", "emails", "resumo", "leituras"],
+      tarde: ["agenda", "tarefas", "escala", "emails", "resumo", "leituras"],
+      fecho: ["agenda", "tarefas", "escala", "emails", "resumo", "leituras"],
+      "fim-de-semana": ["agenda", "tarefas", "escala", "leituras", "resumo", "emails"],
+      vespera: ["agenda", "tarefas", "escala", "leituras", "resumo", "emails"],
     };
     body = `
       ${dutyBanner()}

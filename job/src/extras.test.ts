@@ -22,7 +22,8 @@ test("fecho do dia junta escala, primeiro compromisso e tarefas", () => {
   const msg = composeEvening(
     "2026-11-24",
     [
-      { title: "Banco M", start_at: "2026-11-25T09:00:00Z", all_day: false, calendar: "Family" },
+      { title: "Banco P", start_at: "2026-11-25T09:00:00Z", all_day: false, calendar: "Family" },
+      { title: "Banco M noite", start_at: "2026-11-25T00:00:00Z", all_day: true, calendar: "Family" },
       { title: "Reunião de serviço", start_at: "2026-11-25T14:00:00Z", all_day: false, calendar: "Calendário" },
       { title: "Jantar", start_at: "2026-11-25T20:00:00Z", all_day: false, calendar: "Family" },
     ],
@@ -35,6 +36,6 @@ test("fecho do dia junta escala, primeiro compromisso e tarefas", () => {
   );
   assert.equal(
     msg.body,
-    "Amanhã: Banco M às 09:00. Primeiro compromisso às 14:00 (Reunião de serviço). Por fechar hoje: 1 tarefa. Para amanhã: 1 tarefa.",
+    "Amanhã: Banco P às 09:00. Primeiro compromisso às 14:00 (Reunião de serviço). Michele de banco amanhã (noite). Por fechar hoje: 1 tarefa. Para amanhã: 1 tarefa.",
   );
 });

@@ -47,7 +47,8 @@ export function clearCache() {
 
 // Eventos vindos do iPhone (Atalho): Outlook do hospital e Família do iCloud.
 // Turnos de urgência ("Banco M", "Banco P dia", "Urgência", "SU", "Prevenção") contam como escala.
-export const DUTY_RE = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+// "Banco P ..." é o Pedro, "Banco M ..." é a Michele (não conta como escala dele).
+export const DUTY_RE = /^\s*banco\b(?!\s+M\b)|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
 export function deviceSource(title: string, calendar?: string | null): CalEvent["source"] {
   if (DUTY_RE.test(title)) return "escala";
   // Calendários pessoais do iPhone (Família, feriados, corridas…); o resto conta como hospital.

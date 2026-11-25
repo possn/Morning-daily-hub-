@@ -33,9 +33,9 @@ export function demoBrief(): Brief {
     events: [
       { id: "g1", source: "google", title: "Ginásio", start: iso(0, 7, 0), end: iso(0, 7, 45), allDay: false },
       { id: "g2", source: "google", title: "Jantar com amigos", start: iso(0, 20, 30), end: iso(0, 22, 30), allDay: false, location: "Lisboa" },
-      { id: "e1", source: "escala", title: "Urgência 24h", start: iso(1, 9, 0), end: iso(2, 9, 0), allDay: false, calendar: "Escala" },
+      { id: "e1", source: "escala", title: "Banco P 24h", start: `${ymd(1)}T00:00:00`, end: `${ymd(2)}T00:00:00`, allDay: true, calendar: "Family" },
       { id: "g3", source: "google", title: "Dentista", start: iso(3, 18, 0), end: iso(3, 18, 30), allDay: false },
-      { id: "e2", source: "escala", title: "Urgência noite", start: iso(6, 20, 0), end: iso(7, 9, 0), allDay: false, calendar: "Escala" },
+      { id: "e2", source: "escala", title: "Banco P noite", start: `${ymd(6)}T00:00:00`, end: `${ymd(7)}T00:00:00`, allDay: true, calendar: "Family" },
     ],
     emails: [
       { id: "m1", from: "Coordenação UCIP", subject: "Escala de dezembro: trocas até 28/11", why: "Prazo esta semana para pedir trocas", action: "Confirmar disponibilidade", priority: "alta", link: "#", task: "Pedir trocas da escala de dezembro", due: ymd(4) },
@@ -64,6 +64,8 @@ export function demoOutlook(): CalEvent[] {
   return [
     { id: "o1", source: "outlook", title: "Passagem de turno UCIP", start: iso(0, 8, 0), end: iso(0, 8, 45), allDay: false, location: "UCIP" },
     { id: "o2", source: "outlook", title: "Reunião de serviço", start: iso(0, 14, 0), end: iso(0, 15, 30), allDay: false, location: "Sala de reuniões" },
+    { id: "f1", source: "google", title: "Banco M - PAMI", start: `${ymd(0)}T00:00:00`, end: `${ymd(1)}T00:00:00`, allDay: true, calendar: "Family" },
+    { id: "f2", source: "google", title: "Banco M noite", start: `${ymd(6)}T00:00:00`, end: `${ymd(7)}T00:00:00`, allDay: true, calendar: "Family" },
     { id: "o3", source: "outlook", title: "Formação: simulação", start: iso(3, 9, 0), end: iso(3, 12, 0), allDay: false },
   ];
 }

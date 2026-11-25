@@ -371,3 +371,22 @@ body.menu-open { overflow: hidden; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .mail-apps { display: flex; gap: 14px; font-size: 14px; }
 .subhead-li { border: 0 !important; padding: 0 !important; }
+
+/* escala do mês */
+:root { --mi: #c2569b; }
+.dot.mi { background: var(--mi); }
+.duty-mi { margin: 6px 0 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.duty-mi-only { padding-top: 10px; padding-bottom: 10px; }
+.duty-mi-only .duty-mi { margin: 0; }
+.esc-month { margin: 12px 0 6px; font-size: 15px; }
+.esc-month:first-of-type { margin-top: 4px; }
+.esc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.esc-stat { border-radius: 12px; padding: 8px 10px; font-size: 14px; background: color-mix(in srgb, var(--escala) 10%, transparent); }
+.esc-stat.mi { background: color-mix(in srgb, var(--mi) 12%, transparent); }
+.esc-who { display: block; font-size: 12px; color: var(--muted); }
+.esc-days { list-style: none; margin: 8px 0 0; padding: 0; }
+.esc-day { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); font-size: 14px; }
+.esc-date { width: 56px; color: var(--muted); }
+.esc-chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--escala); }
+.esc-day.mi .esc-chip { background: var(--mi); }
+.esc-day .pill { margin-left: auto; }
