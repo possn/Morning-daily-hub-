@@ -2,6 +2,7 @@ import "./styles.css";
 import type { Brief, CalEvent, EmailItem, Reading, ReplyItem, TaskItem, Weather } from "./types";
 import { addTask, callFn, clearCache, updateTask, enablePush, shortcutUrl, fetchSnapshot, isDemo, pushState, readCache, sb, syncPush, type Snapshot } from "./data";
 import { sunPhase, sunTimes } from "./sun";
+import { ICON, pickHighlights, type Highlight } from "./highlights";
 
 const app = document.getElementById("app")!;
 const LOCALE = "pt-PT";
@@ -400,6 +401,45 @@ function trafficCard(): string {
     </section>`;
 }
 
+// ---------- destaques dos próximos dias ----------
+function highlights(days = 7): Highlight[] {
+  const today = ymd(new Date());
+  const end14 = addDays(today, 14);
+  const evs = allEvents()
+    .map((e) => ({ title: e.title, start: e.start, allDay: e.allDay, calendar: e.calendar, date: e.allDay ? e.start.slice(0, 10) : ymd(new Date(e.start)), hospital: e.source === "outlook" }))
+    .filter((e) => e.date >= today && e.date < end14 && !(!e.allDay && e.date === today && Date.parse(e.start) < Date.now() - 3600e3));
+  const last = addDays(today, days);
+  return pickHighlights(evs).filter((h) => h.date <= last);
+}
+
+function dayLabel(d: string): string {
+  const today = ymd(new Date());
+  if (d === today) return "Hoje";
+  if (d === addDays(today, 1)) return "Amanhã";
+  const dt = new Date(`${d}T12:00:00`);
+  return `${cap(dt.toLocaleDateString(LOCALE, { weekday: "short" }).replace(".", "").slice(0, 3))} ${dt.getDate()}`;
+}
+
+function highlightsCard(): string {
+  const list = highlights().slice(0, 8);
+  if (!list.length) return "";
+  const today = ymd(new Date());
+  return `
+    <section class="card highlights">
+      <h2>Próximos dias</h2>
+      <ul class="hl-list">${list
+        .map(
+          (h) => `
+        <li class="hl ${h.kind}${h.date === today ? " is-today" : ""}">
+          <span class="hl-ico" aria-hidden="true">${ICON[h.kind]}</span>
+          <span class="hl-when">${esc(dayLabel(h.date))}${h.allDay ? "" : ` · ${esc(time(h.start))}`}</span>
+          <span class="hl-title">${esc(h.title)}</span>
+        </li>`,
+        )
+        .join("")}</ul>
+    </section>`;
+}
+
 // ---------- escala do mês (bancos do Pedro e da Michele) ----------
 // "Banco P ..." é o Pedro, "Banco M ..." a Michele. Noite e dia contam 12 h; "24h" ou sem indicação contam 24 h.
 type Banco = { date: string; who: "P" | "M"; kind: "dia" | "noite" | "24h"; hours: number; place: string; title: string };
@@ -688,6 +728,7 @@ function renderMain() {
     body = `
       ${dutyBanner()}
       ${trafficCard()}
+      ${highlightsCard()}
       ${stale ? `<p class="stale">A mostrar o brief de ${esc(b!.date)}. O de hoje ainda não foi gerado.</p>` : ""}
       ${weekStrip()}
       <p class="faixa">${FAIXA_TEXTO[faixa]}</p>

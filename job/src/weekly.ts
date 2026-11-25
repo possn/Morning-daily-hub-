@@ -2,6 +2,7 @@
 // os turnos, a carga do hospital e o tempo dos próximos 7 dias.
 import { createClient } from "@supabase/supabase-js";
 import { loadConfig, sendPush, setConfig } from "./push.js";
+import { ICON, pickHighlights } from "./highlights.js";
 import { config, TZ } from "./config.js";
 import { addDays, localDate } from "./time.js";
 import type { Weather } from "./types.js";
@@ -48,6 +49,8 @@ export function composeWeek(today: string, rows: Row[], weather?: Weather): { ti
   }
   const mi = inWeek.filter((r) => SPOUSE.test(r.title));
   if (mi.length) parts.push(`Michele: ${mi.map((r) => `${weekday(localDate(new Date(r.start_at)))} (${r.title.replace(/^\s*banco\s+M\s*[-–]?\s*/i, "").trim() || "banco"})`).join(", ")}.`);
+  const hl = highlightRows(rows).filter((h) => h.date >= from && h.date <= to && h.kind !== "reuniao").slice(0, 4);
+  if (hl.length) parts.push(`Destaques: ${hl.map((h) => `${ICON[h.kind]} ${weekday(h.date)} ${h.title.trim().slice(0, 40)}`).join(", ")}.`);
   const rainy = (weather?.days ?? []).filter((d) => d.date >= from && d.date <= to && d.rain >= 60).map((d) => weekday(d.date));
   if (rainy.length) parts.push(`Chuva provável: ${rainy.join(", ")}.`);
   return { title: "A tua semana", body: parts.join(" ") };
@@ -77,4 +80,18 @@ export async function maybeSendWeekly(today: string, weather?: Weather, readings
   const sent = await sendPush(sb, cfg, ownerUserId, msg);
   if (sent) await setConfig(sb, "last_week_push", today);
   return `enviado a ${sent}`;
+}
+
+/** Destaques a partir das linhas do calendário (o calendário do hospital conta como reuniões). */
+export function highlightRows(rows: Row[]) {
+  return pickHighlights(
+    rows.map((r) => ({
+      title: r.title,
+      start: r.start_at,
+      allDay: r.all_day,
+      calendar: r.calendar,
+      date: localDate(new Date(r.start_at)),
+      hospital: !!r.calendar && !PERSONAL.test(r.calendar) && r.calendar !== "google" && r.calendar !== "escala",
+    })),
+  );
 }

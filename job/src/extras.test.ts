@@ -36,6 +36,27 @@ test("fecho do dia junta escala, primeiro compromisso e tarefas", () => {
   );
   assert.equal(
     msg.body,
-    "Amanhã: Banco P às 09:00. Primeiro compromisso às 14:00 (Reunião de serviço). Michele de banco amanhã (noite). Por fechar hoje: 1 tarefa. Para amanhã: 1 tarefa.",
+    "Amanhã: Banco P às 09:00. Primeiro compromisso às 14:00 (Reunião de serviço). Michele de banco amanhã (noite). Também: 🎉 Jantar às 20:00. Por fechar hoje: 1 tarefa. Para amanhã: 1 tarefa.",
   );
+});
+
+test("destaques ignoram rotinas e juntam feriados", async () => {
+  const { pickHighlights } = await import("./highlights.js");
+  const ev = (title: string, date: string, calendar = "Family", hospital = false) => ({ title, start: `${date}T10:00:00Z`, allDay: false, calendar, date, hospital });
+  const out = pickHighlights([
+    ev("Pai Natação", "2026-11-27"),
+    ev("Pai Natação", "2026-12-04"),
+    ev("Festa Natal SRVS", "2026-12-07"),
+    ev("FERIADO", "2026-12-01", "Calendário", true),
+    ev("Restauração da Independência", "2026-12-01", "Feriados de Portugal"),
+    ev("projeto ped csp", "2026-11-26", "Calendário", true),
+    ev("Banco P noite", "2026-11-26"),
+    ev("🏔 6 Cascatas Trail Running", "2026-11-29", "Dorsal · Malte Runners"),
+  ]);
+  assert.deepEqual(out.map((h) => `${h.kind}:${h.title}`), [
+    "reuniao:projeto ped csp",
+    "prova:🏔 6 Cascatas Trail Running",
+    "feriado:Restauração da Independência",
+    "festa:Festa Natal SRVS",
+  ]);
 });

@@ -390,3 +390,11 @@ body.menu-open { overflow: hidden; }
 .esc-chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--escala); }
 .esc-day.mi .esc-chip { background: var(--mi); }
 .esc-day .pill { margin-left: auto; }
+
+/* destaques dos próximos dias */
+.hl-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.hl { display: grid; grid-template-columns: 24px 96px 1fr; align-items: baseline; gap: 6px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); font-size: 15px; }
+.hl:first-child { border-top: 0; }
+.hl-when { color: var(--muted); font-size: 13px; }
+.hl.is-today .hl-when { color: var(--escala); font-weight: 600; }
+.hl.greve .hl-title { font-weight: 600; }
