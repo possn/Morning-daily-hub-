@@ -13,8 +13,10 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
   auth: { persistSession: false },
 });
 const TZ = "Europe/Lisbon";
-// Turnos de urgência: "Banco M", "Banco P dia", "Urgência", "SU", "Prevenção"...
-const DUTY = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+// Turnos de urgência do Pedro: "Banco P dia", "Banco P noite", "Urgência", "SU", "Prevenção"...
+// "Banco M ..." são os bancos da Michele (mostrados à parte).
+const DUTY = /^\s*banco\b(?!\s+M\b)|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+const SPOUSE = /^\s*banco\s+M\b/i;
 
 type In = { title?: string; start?: string; end?: string; allDay?: boolean | string; location?: string; calendar?: string };
 
@@ -82,6 +84,8 @@ function compose(today: string, rows: Row[], brief: BriefLite | null) {
   if (hospital.length) {
     parts.push(`Hospital: ${hospital.length} ${hospital.length === 1 ? "evento" : "eventos"}, o primeiro às ${hmLisbon(new Date(hospital[0].start_at))}.`);
   }
+  const mi = todays.find((r) => SPOUSE.test(r.title));
+  if (mi) parts.push(`Michele de banco hoje${/noite/i.test(mi.title) ? " (noite)" : ""}.`);
   const n = brief?.emails?.length ?? 0;
   if (n) parts.push(`${n} ${n === 1 ? "email pede" : "emails pedem"} atenção.`);
   return {

@@ -6,7 +6,9 @@ import { config, TZ } from "./config.js";
 import { addDays, localDate } from "./time.js";
 import type { Weather } from "./types.js";
 
-export const DUTY = /^\s*banco\b|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+// Bancos do Pedro ("Banco P ..."); os da Michele ("Banco M ...") vão à parte.
+export const DUTY = /^\s*banco\b(?!\s+M\b)|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+export const SPOUSE = /^\s*banco\s+M\b/i;
 export const PERSONAL = /fam[ií]l|feriad|holiday|anivers|birthday|dorsal|runners/i;
 
 export type Row = { title: string; start_at: string; all_day: boolean; calendar: string | null };
@@ -30,7 +32,7 @@ export function composeWeek(today: string, rows: Row[], weather?: Weather): { ti
     return d >= from && d <= to;
   });
   const duty = inWeek.filter((r) => DUTY.test(r.title));
-  const hospital = inWeek.filter((r) => !r.all_day && !DUTY.test(r.title) && !PERSONAL.test(r.calendar ?? ""));
+  const hospital = inWeek.filter((r) => !r.all_day && !DUTY.test(r.title) && !SPOUSE.test(r.title) && !PERSONAL.test(r.calendar ?? ""));
 
   const parts: string[] = [];
   parts.push(
@@ -44,6 +46,8 @@ export function composeWeek(today: string, rows: Row[], weather?: Weather): { ti
       `Hospital: ${hospital.length} ${hospital.length === 1 ? "compromisso" : "compromissos"}, o primeiro ${weekday(localDate(new Date(first.start_at)))} às ${hm(first.start_at)}.`,
     );
   }
+  const mi = inWeek.filter((r) => SPOUSE.test(r.title));
+  if (mi.length) parts.push(`Michele: ${mi.map((r) => `${weekday(localDate(new Date(r.start_at)))} (${r.title.replace(/^\s*banco\s+M\s*[-–]?\s*/i, "").trim() || "banco"})`).join(", ")}.`);
   const rainy = (weather?.days ?? []).filter((d) => d.date >= from && d.date <= to && d.rain >= 60).map((d) => weekday(d.date));
   if (rainy.length) parts.push(`Chuva provável: ${rainy.join(", ")}.`);
   return { title: "A tua semana", body: parts.join(" ") };

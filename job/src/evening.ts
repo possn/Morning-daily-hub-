@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { config, TZ } from "./config.js";
 import { loadConfig, sendPush, setConfig } from "./push.js";
 import { addDays, localDate } from "./time.js";
-import { DUTY, hm, PERSONAL, type Row } from "./weekly.js";
+import { DUTY, hm, PERSONAL, SPOUSE, type Row } from "./weekly.js";
 import type { CalEvent, ReplyItem, TaskItem } from "./types.js";
 
 export function isWeekdayEvening(now = new Date()): boolean {
@@ -29,8 +29,9 @@ export function composeEvening(
 
   const parts: string[] = [];
   const duty = all.find((r) => DUTY.test(r.title));
+  const mi = all.find((r) => SPOUSE.test(r.title));
   const timed = all
-    .filter((r) => !r.all_day && !PERSONAL.test(r.calendar ?? "") && r !== duty)
+    .filter((r) => !r.all_day && !PERSONAL.test(r.calendar ?? "") && r !== duty && r !== mi)
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
   if (duty) parts.push(`Amanhã: ${duty.title.trim()}${duty.all_day ? "" : ` às ${hm(duty.start_at)}`}.`);
   if (timed.length) {
@@ -39,6 +40,7 @@ export function composeEvening(
     parts.push("Amanhã sem compromissos marcados.");
   }
 
+  if (mi) parts.push(`Michele de banco amanhã${/noite/i.test(mi.title) ? " (noite)" : ""}.`);
   const late = tasks.filter((t) => t.due && t.due <= today).length;
   const next = tasks.filter((t) => t.due === tomorrow).length;
   if (late) parts.push(`Por fechar hoje: ${late} ${late === 1 ? "tarefa" : "tarefas"}.`);
