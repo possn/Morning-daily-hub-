@@ -4,8 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 import { config, TZ } from "./config.js";
 import { loadConfig, sendPush, setConfig } from "./push.js";
 import { addDays, localDate } from "./time.js";
-import { DUTY, hm, PERSONAL, SPOUSE, type Row } from "./weekly.js";
+import { DUTY, highlightRows, hm, PERSONAL, SPOUSE, type Row } from "./weekly.js";
 import type { CalEvent, ReplyItem, TaskItem } from "./types.js";
+import { ICON } from "./highlights.js";
 
 export function isWeekdayEvening(now = new Date()): boolean {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", hour: "2-digit", hour12: false }).formatToParts(now);
@@ -22,10 +23,11 @@ export function composeEvening(
   toReply: ReplyItem[],
 ): { title: string; body: string } {
   const tomorrow = addDays(today, 1);
-  const all: Row[] = [
+  const every: Row[] = [
     ...rows,
     ...google.map((e) => ({ title: e.title, start_at: e.start, all_day: e.allDay, calendar: e.source === "escala" ? "escala" : "google" })),
-  ].filter((r) => localDate(new Date(r.start_at)) === tomorrow);
+  ];
+  const all = every.filter((r) => localDate(new Date(r.start_at)) === tomorrow);
 
   const parts: string[] = [];
   const duty = all.find((r) => DUTY.test(r.title));
@@ -41,6 +43,10 @@ export function composeEvening(
   }
 
   if (mi) parts.push(`Michele de banco amanhã${/noite/i.test(mi.title) ? " (noite)" : ""}.`);
+  const hl = highlightRows(every)
+    .filter((h) => h.date === tomorrow && h.title !== timed[0]?.title)
+    .slice(0, 3);
+  if (hl.length) parts.push(`Também: ${hl.map((h) => `${ICON[h.kind]} ${h.title.trim().slice(0, 50)}${h.allDay ? "" : ` às ${hm(h.start)}`}`).join("; ")}.`);
   const late = tasks.filter((t) => t.due && t.due <= today).length;
   const next = tasks.filter((t) => t.due === tomorrow).length;
   if (late) parts.push(`Por fechar hoje: ${late} ${late === 1 ? "tarefa" : "tarefas"}.`);
@@ -72,3 +78,4 @@ export async function maybeSendEvening(today: string, google: CalEvent[], tasks:
   if (sent) await setConfig(sb, "last_evening_push", today);
   return `enviado a ${sent}`;
 }
+

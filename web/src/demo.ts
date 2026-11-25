@@ -66,6 +66,8 @@ export function demoOutlook(): CalEvent[] {
     { id: "o2", source: "outlook", title: "Reunião de serviço", start: iso(0, 14, 0), end: iso(0, 15, 30), allDay: false, location: "Sala de reuniões" },
     { id: "f1", source: "google", title: "Banco M - PAMI", start: `${ymd(0)}T00:00:00`, end: `${ymd(1)}T00:00:00`, allDay: true, calendar: "Family" },
     { id: "f2", source: "google", title: "Banco M noite", start: `${ymd(6)}T00:00:00`, end: `${ymd(7)}T00:00:00`, allDay: true, calendar: "Family" },
+    { id: "f3", source: "google", title: "Festa de Natal do serviço", start: iso(4, 20, 0), end: iso(4, 23, 0), allDay: false, calendar: "Family" },
+    { id: "f4", source: "google", title: "🏔 Trail da Serra", start: `${ymd(5)}T00:00:00`, end: `${ymd(6)}T00:00:00`, allDay: true, calendar: "Dorsal · Malte Runners" },
     { id: "o3", source: "outlook", title: "Formação: simulação", start: iso(3, 9, 0), end: iso(3, 12, 0), allDay: false },
   ];
 }
