@@ -1,13 +1,8 @@
 name: Brief da manhã
 
 on:
-  schedule:
-    # 05:15 UTC = 05:15 em Lisboa no inverno, 06:15 no verão.
-    # O GitHub pode atrasar crons até alguns minutos em horas de pico.
-    - cron: "15 5 * * *"
-    # Atualizações ao longo do dia (emails novos): 12:15 e 18:15 em Lisboa no inverno.
-    - cron: "15 12 * * *"
-    - cron: "15 18 * * *"
+  # O arranque a horas é dado pelo Supabase (pg_cron: 05:15, 12:15 e 18:15 UTC, ver supabase/migrations/0007_agendador.sql),
+  # porque o horário do GitHub chegava com horas de atraso.
   workflow_dispatch:
     inputs:
       semana:
