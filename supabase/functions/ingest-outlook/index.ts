@@ -171,7 +171,10 @@ Deno.serve(async (req) => {
   const from = toIso(body.from) ?? new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
   const to = toIso(body.to) ?? new Date(Date.now() + 14 * 864e5).toISOString();
 
-  const del = await sb.from("outlook_events").delete().eq("user_id", OWNER).gte("start_at", from).lt("start_at", to);
+  // O Atalho só encontra eventos que ainda não começaram (ex.: às 07:00 já não vê o banco de hoje, que começa às 00:00).
+  // Por isso só se apagam eventos que começam depois deste momento; os de hoje que já começaram ficam como estavam.
+  const delFrom = new Date(Math.max(Date.parse(from), Date.now() - 60e3)).toISOString();
+  const del = await sb.from("outlook_events").delete().eq("user_id", OWNER).gte("start_at", delFrom).lt("start_at", to);
   if (del.error) return new Response(del.error.message, { status: 500 });
   if (rows.length) {
     const ins = await sb.from("outlook_events").upsert(rows, { onConflict: "user_id,uid" });
@@ -185,7 +188,13 @@ Deno.serve(async (req) => {
   if (body.notify !== false && body.notify !== "false" && (force || cfg.last_push_date !== today)) {
     const { data: b } = await sb
       .from("briefs").select("payload").eq("user_id", OWNER).eq("brief_date", today).maybeSingle();
-    const msg = compose(today, rows as Row[], (b?.payload as BriefLite) ?? null);
+    // Lê da base de dados (inclui os eventos de hoje que já começaram e que o Atalho não envia, como o banco de hoje).
+    const dayStart = new Date(Date.now() - 36 * 3600e3).toISOString();
+    const dayEnd = new Date(Date.now() + 36 * 3600e3).toISOString();
+    const { data: stored } = await sb
+      .from("outlook_events").select("title,start_at,end_at,all_day,calendar").eq("user_id", OWNER)
+      .gte("start_at", dayStart).lt("start_at", dayEnd).order("start_at");
+    const msg = compose(today, ((stored as Row[] | null) ?? (rows as Row[])), (b?.payload as BriefLite) ?? null);
     push = await sendPush(cfg, OWNER, msg);
     if (push.sent) await sb.from("app_config").upsert({ key: "last_push_date", value: today, updated_at: new Date().toISOString() });
   } else if (cfg.last_push_date === today) push = { sent: 0, reason: "já enviada hoje" };
