@@ -43,7 +43,7 @@ async function main() {
   const readings = await attempt<{ items: Reading[]; fresh: boolean }>(
     "leituras",
     { items: [], fresh: false },
-    () => cachedReadings(today, refreshReadings, fetchReadings),
+    () => cachedReadings(today, refreshReadings, fetchReadings, process.env.FORCE_READINGS === "1"),
     sources,
   );
 
