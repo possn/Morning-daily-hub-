@@ -88,6 +88,14 @@ const Pick = z.object({
       pmid: z.string(),
       design: z.string().describe("Tipo de estudo em português, no máximo 5 palavras (ex.: «Ensaio aleatorizado multicêntrico», «Coorte retrospetiva»)"),
       summary: z.string().describe("2 frases em português europeu: pergunta/população e resultado principal com números se existirem"),
+      details: z.object({
+        pergunta: z.string().describe("Pergunta do estudo, 1 frase"),
+        desenho: z.string().describe("Desenho, contexto (centros, países) e período, 1–2 frases"),
+        populacao: z.string().describe("População: n, idades, critérios principais"),
+        resultados: z.string().describe("Outcome primário e secundários relevantes com os números do resumo (efeito, IC 95%, p); 2–4 frases"),
+        limitacoes: z.string().describe("Limitações evidentes pelo desenho ou referidas no resumo; não inventes"),
+        pratica: z.string().describe("Implicação prática para cuidados intensivos pediátricos e grau de confiança (ex.: muda a prática / gera hipótese), 1–2 frases"),
+      }),
     }),
   ).describe("Os 5 artigos mais relevantes para a prática em cuidados intensivos pediátricos, por ordem"),
 });
@@ -108,12 +116,13 @@ export async function fetchReadings(days = 7): Promise<Reading[]> {
   const xml = await (await eutils("efetch.fcgi", { id: ids.join(","), retmode: "xml" })).text();
   const articles = parseArticles(xml);
   const byId = new Map(articles.map((a) => [a.pmid, a]));
-  const toReading = (a: Article, design: string, summary: string): Reading => ({
+  const toReading = (a: Article, design: string, summary: string, details?: Reading["details"]): Reading => ({
     pmid: a.pmid,
     title: a.title.slice(0, 300),
     journal: a.journal,
     design: design.length > 70 ? `${design.slice(0, 69)}…` : design,
     summary: summary.slice(0, 500),
+    ...(details ? { details } : {}),
     link: `https://pubmed.ncbi.nlm.nih.gov/${a.pmid}/`,
   });
 
@@ -129,7 +138,7 @@ export async function fetchReadings(days = 7): Promise<Reading[]> {
       }));
       const res = await client.beta.messages.parse({
         model: config.model,
-        max_tokens: 8000,
+        max_tokens: 16000,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         output_config: { effort: "low", format: betaZodOutputFormat(Pick) },
@@ -137,12 +146,13 @@ export async function fetchReadings(days = 7): Promise<Reading[]> {
           "Escolhes leituras semanais para um médico de cuidados intensivos pediátricos em Portugal. " +
           "Prioriza: ensaios aleatorizados, meta-análises, recomendações e grandes coortes com impacto na prática; " +
           "população pediátrica crítica. Evita relatos de caso e estudos pequenos sem impacto prático. " +
-          "Resume só o que está no resumo do artigo, sem extrapolar nem inventar números.",
+          "Resume só o que está no resumo do artigo, sem extrapolar nem inventar números. " +
+          "Se um dado não estiver no resumo, escreve «não referido no resumo». Português europeu, linguagem técnica médica.",
         messages: [{ role: "user", content: JSON.stringify(input) }],
       });
       const picked = (res.parsed_output?.items ?? []).flatMap((x) => {
         const a = byId.get(x.pmid);
-        return a ? [toReading(a, x.design, x.summary)] : [];
+        return a ? [toReading(a, x.design, x.summary, x.details)] : [];
       });
       if (picked.length) return picked.slice(0, 5);
     } catch (err) {

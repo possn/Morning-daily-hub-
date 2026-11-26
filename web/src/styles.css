@@ -398,3 +398,9 @@ body.menu-open { overflow: hidden; }
 .hl-when { color: var(--muted); font-size: 13px; }
 .hl.is-today .hl-when { color: var(--escala); font-weight: 600; }
 .hl.greve .hl-title { font-weight: 600; }
+
+/* resumo estruturado das leituras */
+.rd { margin: 8px 0 4px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--muted) 10%, transparent); font-size: 14px; line-height: 1.45; }
+.rd dt { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-top: 8px; }
+.rd dt:first-child { margin-top: 0; }
+.rd dd { margin: 2px 0 0; }

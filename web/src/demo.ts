@@ -43,7 +43,7 @@ export function demoBrief(): Brief {
       { id: "m3", from: "Banco", subject: "Extrato disponível", why: "Informativo", action: "Ver quando der", priority: "baixa", link: "#" },
     ],
     readings: [
-      { pmid: "1", title: "Exemplo: oxigenoterapia conservadora em crianças ventiladas", journal: "Pediatr Crit Care Med", design: "Ensaio aleatorizado", summary: "Texto de demonstração. Aqui aparece o resumo em duas frases com o resultado principal.", link: "https://pubmed.ncbi.nlm.nih.gov/" },
+      { pmid: "1", title: "Exemplo: oxigenoterapia conservadora em crianças ventiladas", journal: "Pediatr Crit Care Med", design: "Ensaio aleatorizado", summary: "Texto de demonstração. Aqui aparece o resumo em duas frases com o resultado principal.", details: { pergunta: "Demonstração: o alvo de SpO2 mais baixo reduz dias de ventilação?", desenho: "Ensaio aleatorizado multicêntrico (texto fictício).", populacao: "Crianças ventiladas (texto fictício).", resultados: "Texto fictício com efeito, IC 95% e p.", limitacoes: "Texto fictício.", pratica: "Texto fictício." }, link: "https://pubmed.ncbi.nlm.nih.gov/" },
       { pmid: "2", title: "Exemplo: fluidos na sépsis pediátrica", journal: "Lancet Child Adolesc Health", design: "Meta-análise", summary: "Texto de demonstração.", link: "https://pubmed.ncbi.nlm.nih.gov/" },
     ],
     toReply: [

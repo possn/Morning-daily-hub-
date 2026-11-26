@@ -39,7 +39,7 @@ async function main() {
     attempt<TaskItem[]>("tarefas", [], fetchAppTasks, sources),
   ]);
   const tasks = [...appTasks, ...notion, ...obsidian];
-  const refreshReadings = process.env.FORCE_WEEKLY === "1" || isSundayEvening();
+  const refreshReadings = process.env.FORCE_WEEKLY === "1" || process.env.FORCE_READINGS === "1" || isSundayEvening();
   const readings = await attempt<{ items: Reading[]; fresh: boolean }>(
     "leituras",
     { items: [], fresh: false },

@@ -344,6 +344,24 @@ function quickTask(key: string, title: string, due?: string, label = "Criar tare
   }</button></p>`;
 }
 
+// Resumo estruturado de cada artigo, aberto/fechado por toque.
+const readingOpen = new Set<string>();
+function readingDetails(r: Reading): string {
+  const d = r.details!;
+  if (!readingOpen.has(r.pmid)) return `<p class="act"><button class="link" data-reading="${esc(r.pmid)}">📄 Ler resumo</button></p>`;
+  const row = (k: string, v: string) => `<dt>${k}</dt><dd>${esc(v)}</dd>`;
+  return `
+    <dl class="rd">
+      ${row("Pergunta", d.pergunta)}
+      ${row("Desenho", d.desenho)}
+      ${row("População", d.populacao)}
+      ${row("Resultados", d.resultados)}
+      ${row("Limitações", d.limitacoes)}
+      ${row("Na prática", d.pratica)}
+    </dl>
+    <p class="act"><button class="link" data-reading="${esc(r.pmid)}">Fechar resumo</button> · <a class="link" href="${esc(safeHref(r.link))}" target="_blank" rel="noopener">Abrir no PubMed</a></p>`;
+}
+
 function readingsCard(items: Reading[] | undefined): string {
   if (!items?.length) return "";
   return `
@@ -361,6 +379,7 @@ function readingsCard(items: Reading[] | undefined): string {
             </span>
             <span class="chev" aria-hidden="true">›</span>
           </a>
+          ${r.details ? readingDetails(r) : ""}
           ${quickTask(`r:${r.pmid}`, `Ler: ${r.title.length > 110 ? `${r.title.slice(0, 107)}…` : r.title}`, undefined, "Guardar para ler", false)}
         </li>`,
         )
@@ -863,8 +882,15 @@ function renderLogin(msg = "") {
 // ---------- eventos ----------
 
 app.addEventListener("click", async (ev) => {
-  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto],[data-draft],[data-task],[data-qtask]");
+  const t = (ev.target as HTMLElement).closest<HTMLElement>("[data-view],[data-day],[data-month],[data-action],[data-goto],[data-draft],[data-task],[data-qtask],[data-reading]");
   if (!t) return;
+  if (t.dataset.reading) {
+    const id = t.dataset.reading;
+    if (readingOpen.has(id)) readingOpen.delete(id);
+    else readingOpen.add(id);
+    renderMain();
+    return;
+  }
   if (t.dataset.qtask) {
     const key = t.dataset.qtask;
     t.setAttribute("disabled", "");
