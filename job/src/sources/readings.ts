@@ -129,12 +129,12 @@ export async function fetchReadings(days = 7): Promise<Reading[]> {
   if (config.anthropicKey) {
     try {
       const client = new Anthropic({ apiKey: config.anthropicKey });
-      const input = articles.slice(0, 40).map((a) => ({
+      const input = articles.slice(0, 30).map((a) => ({
         pmid: a.pmid,
         journal: a.journal,
         types: a.types,
         title: a.title,
-        abstract: a.abstract.slice(0, 1500),
+        abstract: a.abstract.slice(0, 4000), // resumo completo (os resultados vêm no fim)
       }));
       const res = await client.beta.messages.parse({
         model: config.model,
