@@ -43,6 +43,7 @@ export async function cachedReadings(
   today: string,
   refreshNow: boolean,
   fetcher: () => Promise<Reading[]>,
+  force = false,
 ): Promise<{ items: Reading[]; fresh: boolean }> {
   const { url, serviceKey } = config.supabase;
   if (!url || !serviceKey) return { items: await fetcher(), fresh: true };
@@ -53,7 +54,7 @@ export async function cachedReadings(
     saved = data?.value ? JSON.parse(data.value as string) : {};
   } catch { /* valor antigo inválido */ }
   const old = !saved.date || saved.date <= new Date(Date.parse(`${today}T12:00:00Z`) - 7 * 864e5).toISOString().slice(0, 10);
-  if (!old && !(refreshNow && saved.date !== today)) return { items: saved.items ?? [], fresh: false };
+  if (!force && !old && !(refreshNow && saved.date !== today)) return { items: saved.items ?? [], fresh: false };
   const items = await fetcher();
   if (items.length) {
     await sb.from("app_config").upsert({ key: "readings", value: JSON.stringify({ date: today, items }), updated_at: new Date().toISOString() });
