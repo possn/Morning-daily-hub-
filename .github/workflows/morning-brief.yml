@@ -9,6 +9,10 @@ on:
         description: "Enviar já o resumo da semana (teste)"
         type: boolean
         default: false
+      leituras:
+        description: "Renovar já as leituras da semana"
+        type: boolean
+        default: false
       fecho:
         description: "Enviar já o fecho do dia (teste)"
         type: boolean
@@ -67,3 +71,4 @@ jobs:
           OWNER_USER_ID: ${{ vars.OWNER_USER_ID }}
           FORCE_WEEKLY: ${{ inputs.semana && '1' || '' }}
           FORCE_EVENING: ${{ inputs.fecho && '1' || '' }}
+          FORCE_READINGS: ${{ inputs.leituras && '1' || '' }}

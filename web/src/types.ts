@@ -64,7 +64,17 @@ export interface Reading {
   journal: string;
   design: string; // ex.: "Ensaio aleatorizado", "Meta-análise"
   summary: string; // 2 frases em português
+  details?: ReadingDetails; // resumo estruturado (a partir do resumo publicado)
   link: string;
+}
+
+export interface ReadingDetails {
+  pergunta: string;
+  desenho: string; // desenho, contexto, período
+  populacao: string; // n, idades, critérios
+  resultados: string; // outcome primário com números (efeito, IC 95%, p)
+  limitacoes: string;
+  pratica: string; // o que muda (ou não) na prática
 }
 
 export interface Brief {
