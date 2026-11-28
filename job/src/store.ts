@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { config } from "./config.js";
-import type { Brief, Reading, TaskItem } from "./types.js";
+import type { Brief, CalEvent, Reading, TaskItem } from "./types.js";
+import { addDays, localDate } from "./time.js";
+import { DUTY, PERSONAL, SPOUSE } from "./weekly.js";
 
 export async function saveBrief(brief: Brief): Promise<void> {
   const { url, serviceKey, ownerUserId } = config.supabase;
@@ -11,6 +13,38 @@ export async function saveBrief(brief: Brief): Promise<void> {
     .from("briefs")
     .upsert({ user_id: ownerUserId, brief_date: brief.date, payload: brief }, { onConflict: "user_id,brief_date" });
   if (error) throw new Error(`Supabase: ${error.code ?? "erro"}`);
+}
+
+/**
+ * Eventos dos calendários pessoais do iPhone (Família, feriados, corridas) e bancos, de hoje a amanhã,
+ * para a IA e o cabeçalho saberem que há banco. Os do calendário do hospital não vão para a IA.
+ */
+export async function fetchDeviceEvents(today: string): Promise<CalEvent[]> {
+  const { url, serviceKey, ownerUserId } = config.supabase;
+  if (!url || !serviceKey || !ownerUserId) return [];
+  const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const { data, error } = await sb
+    .from("outlook_events")
+    .select("uid,title,start_at,end_at,all_day,calendar")
+    .eq("user_id", ownerUserId)
+    .gte("end_at", new Date(Date.parse(`${today}T00:00:00Z`) - 864e5).toISOString())
+    .lt("start_at", new Date(Date.parse(`${addDays(today, 2)}T00:00:00Z`) + 864e5).toISOString())
+    .order("start_at")
+    .limit(200);
+  if (error) throw new Error(`Supabase: ${error.code ?? "erro"}`);
+  return (data ?? []).flatMap((r) => {
+    const title = String(r.title);
+    const duty = DUTY.test(title);
+    if (!duty && !SPOUSE.test(title) && !PERSONAL.test(String(r.calendar ?? ""))) return [];
+    // Dia inteiro: datas locais com fim exclusivo, como no Google (o Atalho manda UTC e fim às 23:59:59).
+    const span = r.all_day
+      ? {
+          start: `${localDate(new Date(r.start_at))}T00:00:00`,
+          end: `${addDays(localDate(new Date(Math.max(Date.parse(r.end_at) - 1, Date.parse(r.start_at)))), 1)}T00:00:00`,
+        }
+      : { start: r.start_at as string, end: r.end_at as string };
+    return [{ id: `o:${r.uid}`, source: duty ? ("escala" as const) : ("google" as const), title, ...span, allDay: !!r.all_day, calendar: r.calendar ?? undefined }];
+  });
 }
 
 /** Tarefas por fazer guardadas na própria app (tabela tasks). */

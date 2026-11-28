@@ -5,7 +5,7 @@ import { fetchCalendarEvents, fetchEmails, fetchToReply, type RawEmail } from ".
 import { fetchNotionTasks } from "./sources/notion.js";
 import { fetchObsidianTasks } from "./sources/obsidian.js";
 import { buildWithAI } from "./ai.js";
-import { cachedReadings, fetchAppTasks, saveBrief } from "./store.js";
+import { cachedReadings, fetchAppTasks, fetchDeviceEvents, saveBrief } from "./store.js";
 import { fetchWeather } from "./sources/weather.js";
 import { isSundayEvening, maybeSendWeekly } from "./weekly.js";
 import { maybeSendEvening } from "./evening.js";
@@ -38,6 +38,11 @@ async function main() {
     attempt<Weather | undefined>("tempo", undefined, fetchWeather, sources),
     attempt<TaskItem[]>("tarefas", [], fetchAppTasks, sources),
   ]);
+  // Bancos e calendário da família vêm do iPhone (não do Google): só para o cabeçalho e para a IA.
+  const device = await attempt<CalEvent[]>("iphone", [], () => fetchDeviceEvents(today), sources);
+  const known = new Set(events.map((e) => `${e.title.trim().toLowerCase()}|${e.start.slice(0, 10)}`));
+  const agenda = [...events, ...device.filter((e) => !known.has(`${e.title.trim().toLowerCase()}|${e.start.slice(0, 10)}`))]
+    .sort((a, b) => a.start.localeCompare(b.start));
   const tasks = [...appTasks, ...notion, ...obsidian];
   const refreshReadings = process.env.FORCE_WEEKLY === "1" || process.env.FORCE_READINGS === "1" || isSundayEvening();
   const readings = await attempt<{ items: Reading[]; fresh: boolean }>(
@@ -47,7 +52,7 @@ async function main() {
     sources,
   );
 
-  const todays = events.filter((e) => e.start.slice(0, 10) === today);
+  const todays = agenda.filter((e) => (e.allDay ? e.start.slice(0, 10) <= today && today < e.end.slice(0, 10) : e.start.slice(0, 10) === today));
   const dutyEvent = todays.find((e) => e.source === "escala");
 
   let brief: Brief = {
@@ -81,7 +86,7 @@ async function main() {
 
   if (config.anthropicKey) {
     try {
-      const ai = await buildWithAI(today, events, emails, tasks);
+      const ai = await buildWithAI(today, agenda, emails, tasks);
       brief = { ...brief, ...ai, aiUsed: true };
       sources.ia = "ok";
     } catch (err) {

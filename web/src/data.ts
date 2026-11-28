@@ -49,6 +49,18 @@ export function clearCache() {
 // Turnos de urgência ("Banco M", "Banco P dia", "Urgência", "SU", "Prevenção") contam como escala.
 // "Banco P ..." é o Pedro, "Banco M ..." é a Michele (não conta como escala dele).
 export const DUTY_RE = /^\s*banco\b(?!\s+M\b)|urg[eê]ncia|\bSU\b|preven[cç][aã]o/i;
+// O Atalho guarda os eventos de dia inteiro em UTC e com fim às 23:59:59 do próprio dia.
+// Normaliza para datas locais com fim exclusivo (dia seguinte às 00:00), como os do Google.
+const localYmd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export function allDaySpan(startIso: string, endIso: string): { start: string; end: string } {
+  const first = localYmd(new Date(startIso));
+  const lastMs = Math.max(Date.parse(endIso) - 1, Date.parse(startIso));
+  const after = new Date(lastMs);
+  after.setHours(12, 0, 0, 0);
+  after.setDate(after.getDate() + 1);
+  return { start: `${first}T00:00:00`, end: `${localYmd(after)}T00:00:00` };
+}
+
 export function deviceSource(title: string, calendar?: string | null): CalEvent["source"] {
   if (DUTY_RE.test(title)) return "escala";
   // Calendários pessoais do iPhone (Família, feriados, corridas…); o resto conta como hospital.
@@ -130,8 +142,7 @@ export async function fetchSnapshot(): Promise<Snapshot> {
       id: `o:${r.uid}`,
       source: deviceSource(r.title, r.calendar),
       title: r.title,
-      start: r.start_at,
-      end: r.end_at,
+      ...(r.all_day ? allDaySpan(r.start_at, r.end_at) : { start: r.start_at, end: r.end_at }),
       allDay: r.all_day,
       location: r.location ?? undefined,
       calendar: r.calendar ?? undefined,
